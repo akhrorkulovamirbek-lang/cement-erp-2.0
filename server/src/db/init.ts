@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import bcrypt from 'bcryptjs';
+import { loadSettingsCache, seedSettingsDefaults } from '../core/settingsCache.js';
 import { pool } from './pool.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -10,6 +11,8 @@ export async function initDb() {
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf-8');
   await pool.query(schema);
   await seedAdmin();
+  await seedSettingsDefaults();
+  await loadSettingsCache();
 }
 
 async function seedAdmin() {
@@ -24,6 +27,9 @@ async function seedAdmin() {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  await pool.query('INSERT INTO users (username, password_hash) VALUES ($1, $2)', [username, passwordHash]);
+  await pool.query(
+    "INSERT INTO users (username, password_hash, full_name, role) VALUES ($1, $2, 'Администратор', 'admin')",
+    [username, passwordHash],
+  );
   console.log(`Admin user "${username}" created.`);
 }

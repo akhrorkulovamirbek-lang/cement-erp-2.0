@@ -1,16 +1,16 @@
 import { Link, useParams } from 'react-router-dom';
-import { PageHeader } from '../components/PageHeader';
-import { DataTable, type Column } from '../components/DataTable';
-import { StatCard } from '../components/StatCard';
-import { Badge } from '../components/Badge';
-import { zavodyHooks, incomingHooks, ticketsHooks, cashExpenseHooks, useZavodBalances } from '../api/modules';
-import { formatDate, formatMoney, formatNumber } from '../lib/format';
-import type { CashExpense } from '../types';
+import { cashExpenseHooks, incomingHooks, ticketsHooks, useZavodBalances, zavodyHooks } from '@/api/modules';
+import { Badge } from '@/components/Badge';
+import { DataTable, type Column } from '@/components/DataTable';
+import { PageHeader } from '@/components/PageHeader';
+import { StatCard } from '@/components/StatCard';
+import { formatDate, formatMoney, formatNumber } from '@/lib/format';
+import type { CashExpense } from '@/types';
 
 interface PurchaseRow {
   key: string;
   date: string;
-  source: 'incoming' | 'ticket';
+  source: 'FACT' | 'DIRECT' | 'ticket';
   cementMarkName: string;
   tonnage: string;
   pricePerTon: string;
@@ -35,7 +35,7 @@ export function ZavodDetail() {
       (r): PurchaseRow => ({
         key: `in-${r.id}`,
         date: r.date,
-        source: 'incoming',
+        source: r.warehouse,
         cementMarkName: r.cement_mark_name,
         tonnage: r.tonnage,
         pricePerTon: r.price_per_ton,
@@ -60,42 +60,86 @@ export function ZavodDetail() {
     {
       key: 'source',
       header: 'Источник',
-      render: (r) => (r.source === 'ticket' ? <Badge tone="blue">Тикет</Badge> : <Badge tone="slate">Приход</Badge>),
+      render: (r) => {
+        if (r.source === 'ticket') return <Badge tone="blue">Тикет</Badge>;
+        if (r.source === 'DIRECT') return <Badge tone="amber">Напрямую</Badge>;
+        return <Badge tone="slate">Факт</Badge>;
+      },
     },
     { key: 'cementMarkName', header: 'Марка' },
-    { key: 'tonnage', header: 'Объём', align: 'right', sortValue: (r) => Number(r.tonnage), render: (r) => `${formatNumber(r.tonnage, 2)} т` },
-    { key: 'pricePerTon', header: 'Цена/т', align: 'right', sortValue: (r) => Number(r.pricePerTon), render: (r) => formatMoney(r.pricePerTon) },
-    { key: 'totalSum', header: 'Сумма', align: 'right', sortValue: (r) => Number(r.totalSum), render: (r) => formatMoney(r.totalSum) },
+    {
+      key: 'tonnage',
+      header: 'Объём',
+      align: 'right',
+      sortValue: (r) => Number(r.tonnage),
+      render: (r) => `${formatNumber(r.tonnage, 2)} т`,
+    },
+    {
+      key: 'pricePerTon',
+      header: 'Цена/т',
+      align: 'right',
+      sortValue: (r) => Number(r.pricePerTon),
+      render: (r) => formatMoney(r.pricePerTon),
+    },
+    {
+      key: 'totalSum',
+      header: 'Сумма',
+      align: 'right',
+      sortValue: (r) => Number(r.totalSum),
+      render: (r) => formatMoney(r.totalSum),
+    },
   ];
 
   const paymentColumns: Column<CashExpense>[] = [
     { key: 'date', header: 'Дата', sortValue: (r) => r.date, render: (r) => formatDate(r.date) },
     { key: 'category', header: 'Категория' },
-    { key: 'amount', header: 'Сумма', align: 'right', sortValue: (r) => Number(r.amount), render: (r) => formatMoney(r.amount, r.currency) },
+    {
+      key: 'amount',
+      header: 'Сумма',
+      align: 'right',
+      sortValue: (r) => Number(r.amount),
+      render: (r) => formatMoney(r.amount, r.currency),
+    },
     { key: 'payment_type', header: 'Способ' },
     { key: 'comment', header: 'Комментарий', render: (r) => r.comment || '—' },
   ];
 
   return (
     <div>
-      <Link to="/zavody" className="mb-3 inline-block text-sm text-slate-500 hover:text-slate-700">
-        ← Заводы
+      <Link to="/counterparties" className="mb-3 inline-block text-sm text-muted-foreground hover:text-foreground">
+        ← Контрагенты
       </Link>
       <PageHeader title={zavod?.name ?? '...'} />
 
-      <div className="mb-6 grid grid-cols-3 gap-4">
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Куплено всего (прямые приходы)" value={formatMoney(balance?.purchased ?? 0)} />
         <StatCard label="Оплачено" value={formatMoney(balance?.paid ?? 0)} />
-        <StatCard label="Мы должны" value={formatMoney(balance?.balance ?? 0)} tone={Number(balance?.balance ?? 0) > 0 ? 'negative' : 'positive'} />
+        <StatCard
+          label="Мы должны"
+          value={formatMoney(balance?.balance ?? 0)}
+          tone={Number(balance?.balance ?? 0) > 0 ? 'negative' : 'positive'}
+        />
       </div>
 
-      <h2 className="mb-2 text-sm font-semibold text-slate-800">Купили (приходы и тикеты)</h2>
+      <h2 className="mb-2 text-sm font-semibold">Купили (приходы и тикеты)</h2>
       <div className="mb-6">
-        <DataTable columns={purchaseColumns} rows={purchases} loading={incoming.isLoading || tickets.isLoading} getRowId={(r) => r.key} emptyMessage="Покупок пока нет" />
+        <DataTable
+          columns={purchaseColumns}
+          rows={purchases}
+          loading={incoming.isLoading || tickets.isLoading}
+          getRowId={(r) => r.key}
+          emptyMessage="Покупок пока нет"
+        />
       </div>
 
-      <h2 className="mb-2 text-sm font-semibold text-slate-800">Оплатили</h2>
-      <DataTable columns={paymentColumns} rows={payments.data ?? []} loading={payments.isLoading} getRowId={(r) => r.id} emptyMessage="Платежей пока нет" />
+      <h2 className="mb-2 text-sm font-semibold">Оплатили</h2>
+      <DataTable
+        columns={paymentColumns}
+        rows={payments.data ?? []}
+        loading={payments.isLoading}
+        getRowId={(r) => r.id}
+        emptyMessage="Платежей пока нет"
+      />
     </div>
   );
 }

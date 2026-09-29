@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { ApiError } from '../api/client';
-import { Button, Input } from '../components/form';
+import { ApiError } from '@/api/client';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useAuth } from '@/context/AuthContext';
 
 export function Login() {
   const { login } = useAuth();
@@ -27,28 +30,35 @@ export function Login() {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-slate-50">
-      <form onSubmit={onSubmit} className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="mb-1 text-lg font-semibold text-slate-900">Cement ERP</h1>
-        <p className="mb-6 text-sm text-slate-500">Войдите, чтобы продолжить</p>
-
-        <div className="space-y-4">
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-600">Логин</span>
-            <Input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus required />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-600">Пароль</span>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          </label>
-        </div>
-
-        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-
-        <Button type="submit" disabled={loading} className="mt-6 w-full">
-          {loading ? 'Вход…' : 'Войти'}
-        </Button>
-      </form>
+    <div className="flex min-h-screen items-center justify-center bg-muted p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardTitle>Cement ERP</CardTitle>
+          <CardDescription>Войдите, чтобы продолжить</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="username">Логин</Label>
+              <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus required />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="password">Пароль</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" disabled={loading} className="w-full">
+              {loading ? 'Вход…' : 'Войти'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

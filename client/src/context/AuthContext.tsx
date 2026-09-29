@@ -1,8 +1,17 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { api, ApiError } from '../api/client';
+import type { UserRole } from '../types';
+
+interface Me {
+  username: string;
+  role: UserRole;
+  fullName: string;
+}
 
 interface AuthState {
   username: string | null;
+  role: UserRole | null;
+  fullName: string | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -11,28 +20,34 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [username, setUsername] = useState<string | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api
-      .get<{ username: string }>('/auth/me')
-      .then((res) => setUsername(res.username))
-      .catch(() => setUsername(null))
+      .get<Me>('/auth/me')
+      .then((res) => setMe(res))
+      .catch(() => setMe(null))
       .finally(() => setLoading(false));
   }, []);
 
   async function login(username: string, password: string) {
-    const res = await api.post<{ username: string }>('/auth/login', { username, password });
-    setUsername(res.username);
+    const res = await api.post<Me>('/auth/login', { username, password });
+    setMe(res);
   }
 
   async function logout() {
     await api.post('/auth/logout');
-    setUsername(null);
+    setMe(null);
   }
 
-  return <AuthContext.Provider value={{ username, loading, login, logout }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{ username: me?.username ?? null, role: me?.role ?? null, fullName: me?.fullName ?? null, loading, login, logout }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

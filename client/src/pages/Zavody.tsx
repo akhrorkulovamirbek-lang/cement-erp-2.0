@@ -1,23 +1,34 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components/PageHeader';
-import { DataTable, type Column } from '../components/DataTable';
-import { Modal } from '../components/Modal';
-import { ConfirmDialog } from '../components/ConfirmDialog';
-import { Button, FormRow, Input } from '../components/form';
-import { Badge } from '../components/Badge';
-import { zavodyHooks, useZavodBalances } from '../api/modules';
-import { formatMoney } from '../lib/format';
-import { useToast } from '../context/ToastContext';
-import { ApiError } from '../api/client';
-import type { Zavod, ZavodBalance } from '../types';
+import { ApiError } from '@/api/client';
+import { useZavodBalances, zavodyHooks } from '@/api/modules';
+import { Badge } from '@/components/Badge';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { DataTable, type Column } from '@/components/DataTable';
+import { PageHeader } from '@/components/PageHeader';
+import { SidePanel } from '@/components/SidePanel';
+import { FormRow, Input, RHFCheckbox } from '@/components/form';
+import { Button } from '@/components/ui/button';
+import { formatMoney } from '@/lib/format';
+import { useToast } from '@/lib/toast';
+import type { Zavod, ZavodBalance } from '@/types';
 
 interface Row extends Zavod {
   purchased: string;
   paid: string;
   balance: string;
 }
+
+interface FormValues {
+  name: string;
+  region: string;
+  phone: string;
+  initial_debt: string;
+  active: boolean;
+}
+
+const emptyForm = (): FormValues => ({ name: '', region: '', phone: '', initial_debt: '0', active: true });
 
 export function Zavody() {
   const { notify } = useToast();
@@ -29,7 +40,7 @@ export function Zavody() {
 
   const [editing, setEditing] = useState<Zavod | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Zavod | null>(null);
-  const { register, handleSubmit, reset, formState } = useForm<{ name: string }>();
+  const { register, control, handleSubmit, reset, formState } = useForm<FormValues>({ defaultValues: emptyForm() });
 
   const balanceMap = new Map<number, ZavodBalance>((balances.data ?? []).map((b) => [b.id, b]));
   const rows: Row[] = (list.data ?? []).map((z) => {
@@ -38,21 +49,28 @@ export function Zavody() {
   });
 
   function openNew() {
-    reset({ name: '' });
+    reset(emptyForm());
     setEditing('new');
   }
   function openEdit(row: Row) {
-    reset({ name: row.name });
+    reset({ name: row.name, region: row.region ?? '', phone: row.phone ?? '', initial_debt: row.initial_debt, active: row.active });
     setEditing(row);
   }
 
-  async function onSubmit(data: { name: string }) {
+  async function onSubmit(data: FormValues) {
+    const payload = {
+      name: data.name,
+      region: data.region || null,
+      phone: data.phone || null,
+      initial_debt: Number(data.initial_debt || 0),
+      active: data.active,
+    };
     try {
       if (editing === 'new') {
-        await create.mutateAsync(data);
+        await create.mutateAsync(payload);
         notify('Завод добавлен');
       } else if (editing) {
-        await update.mutateAsync({ id: editing.id, data });
+        await update.mutateAsync({ id: editing.id, data: payload });
         notify('Сохранено');
       }
       setEditing(null);
@@ -79,13 +97,26 @@ export function Zavody() {
       header: 'Завод',
       sortValue: (r) => r.name,
       render: (r) => (
-        <Link to={`/zavody/${r.id}`} className="font-medium text-brand-700 hover:underline">
+        <Link to={`/zavody/${r.id}`} className="font-medium text-primary hover:underline">
           {r.name}
         </Link>
       ),
     },
-    { key: 'purchased', header: 'Куплено', align: 'right', sortValue: (r) => Number(r.purchased), render: (r) => formatMoney(r.purchased) },
-    { key: 'paid', header: 'Оплачено', align: 'right', sortValue: (r) => Number(r.paid), render: (r) => formatMoney(r.paid) },
+    { key: 'region', header: 'Регион', render: (r) => r.region || '—' },
+    {
+      key: 'purchased',
+      header: 'Куплено',
+      align: 'right',
+      sortValue: (r) => Number(r.purchased),
+      render: (r) => formatMoney(r.purchased),
+    },
+    {
+      key: 'paid',
+      header: 'Оплачено',
+      align: 'right',
+      sortValue: (r) => Number(r.paid),
+      render: (r) => formatMoney(r.paid),
+    },
     {
       key: 'balance',
       header: 'Мы должны',
@@ -94,8 +125,13 @@ export function Zavody() {
       render: (r) => {
         const n = Number(r.balance);
         if (n <= 0) return <Badge tone="green">Долга нет</Badge>;
-        return <span className="font-semibold text-red-600">{formatMoney(n)}</span>;
+        return <span className="font-semibold text-destructive">{formatMoney(n)}</span>;
       },
+    },
+    {
+      key: 'active',
+      header: 'Статус',
+      render: (r) => (r.active ? <Badge tone="green">Активен</Badge> : <Badge tone="slate">Выключен</Badge>),
     },
   ];
 
@@ -107,16 +143,33 @@ export function Zavody() {
         action={<Button onClick={openNew}>+ Добавить завод</Button>}
       />
 
-      <DataTable columns={columns} rows={rows} loading={list.isLoading || balances.isLoading} getRowId={(r) => r.id} onEdit={openEdit} onDelete={setDeleting} />
+      <DataTable
+        columns={columns}
+        rows={rows}
+        loading={list.isLoading || balances.isLoading}
+        getRowId={(r) => r.id}
+        onEdit={openEdit}
+        onDelete={setDeleting}
+      />
 
       {editing && (
-        <Modal title={editing === 'new' ? 'Новый завод' : 'Изменить завод'} onClose={() => setEditing(null)}>
+        <SidePanel title={editing === 'new' ? 'Новый завод' : 'Изменить завод'} onClose={() => setEditing(null)}>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <FormRow label="Название" error={formState.errors.name?.message}>
               <Input autoFocus {...register('name', { required: 'Укажите название' })} />
             </FormRow>
+            <FormRow label="Регион (необязательно)">
+              <Input {...register('region')} />
+            </FormRow>
+            <FormRow label="Телефон (необязательно)">
+              <Input {...register('phone')} placeholder="+998 90 123 45 67" />
+            </FormRow>
+            <FormRow label="Начальный долг">
+              <Input type="number" step="0.01" {...register('initial_debt')} />
+            </FormRow>
+            <RHFCheckbox control={control} name="active" label="Активен" />
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+              <Button type="button" variant="outline" onClick={() => setEditing(null)}>
                 Отмена
               </Button>
               <Button type="submit" disabled={formState.isSubmitting}>
@@ -124,13 +177,13 @@ export function Zavody() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </SidePanel>
       )}
 
       {deleting && (
         <ConfirmDialog
           title="Удалить завод?"
-          message={`Удалить «${deleting.name}»? Это возможно только если завод нигде не используется.`}
+          message="Удалить? Это возможно только если завод нигде не используется. Чтобы скрыть завод из списков, но сохранить историю — снимите галочку «Активен»."
           onConfirm={onDelete}
           onCancel={() => setDeleting(null)}
         />

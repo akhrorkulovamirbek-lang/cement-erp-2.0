@@ -4,7 +4,8 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 
 export const reportsRouter = Router();
 
-const UZS_SALE = `CASE WHEN s.currency = 'USD' THEN s.total_sum * s.usd_rate ELSE s.total_sum END`;
+// Раздел 12.2 ТЗ: цены в Приходе/Продаже — только в сумах, доллары только в движении денег.
+const UZS_SALE = `s.total_sum`;
 const UZS_INCOME = `CASE WHEN currency = 'USD' THEN amount * usd_rate ELSE amount END`;
 const UZS_EXPENSE = `CASE WHEN currency = 'USD' THEN amount * usd_rate ELSE amount END`;
 

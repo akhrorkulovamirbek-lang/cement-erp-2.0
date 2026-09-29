@@ -8,11 +8,12 @@ warehouseRouter.get(
   '/',
   asyncHandler(async (_req, res) => {
     const { rows } = await pool.query(
-      `SELECT wb.*, cm.name AS cement_mark_name
+      `SELECT wb.*, cm.name AS cement_mark_name, z.name AS zavod_name
        FROM warehouse_balance wb
        JOIN cement_marks cm ON cm.id = wb.cement_mark_id
+       JOIN zavody z ON z.id = wb.zavod_id
        WHERE wb.tonnage > 0.001
-       ORDER BY cm.name, wb.type`,
+       ORDER BY z.name, cm.name, wb.packaging`,
     );
     res.json(rows);
   }),

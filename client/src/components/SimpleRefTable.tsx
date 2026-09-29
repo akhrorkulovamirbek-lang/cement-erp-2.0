@@ -1,12 +1,13 @@
+import type { UseMutationResult } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import type { UseMutationResult } from '@tanstack/react-query';
-import { DataTable, type Column } from './DataTable';
-import { ConfirmDialog } from './ConfirmDialog';
-import { Modal } from './Modal';
-import { Button, FormRow, Input } from './form';
-import { useToast } from '../context/ToastContext';
-import { ApiError } from '../api/client';
+import { ApiError } from '@/api/client';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { DataTable, type Column } from '@/components/DataTable';
+import { SidePanel } from '@/components/SidePanel';
+import { FormRow, Input } from '@/components/form';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/lib/toast';
 
 interface Entity {
   id: number;
@@ -47,16 +48,14 @@ export function SimpleRefTable<T extends Entity, TInput extends Record<string, u
   const [editing, setEditing] = useState<T | 'new' | null>(null);
   const [deleting, setDeleting] = useState<T | null>(null);
 
-  const { register, handleSubmit, reset, formState } = useForm<Record<string, unknown>>({
-    defaultValues: {},
-  });
+  const { register, handleSubmit, reset, formState } = useForm<Record<string, unknown>>({ defaultValues: {} });
 
   function openNew() {
-    reset({ [fieldName]: '' } as unknown as TInput);
+    reset({ [fieldName]: '' });
     setEditing('new');
   }
   function openEdit(row: T) {
-    reset({ [fieldName]: (row as unknown as Record<string, unknown>)[fieldName] } as unknown as TInput);
+    reset({ [fieldName]: (row as unknown as Record<string, unknown>)[fieldName] });
     setEditing(row);
   }
 
@@ -95,21 +94,28 @@ export function SimpleRefTable<T extends Entity, TInput extends Record<string, u
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
-        <Button onClick={openNew} className="text-xs !px-3 !py-1.5">
+        <h2 className="text-sm font-semibold">{title}</h2>
+        <Button size="sm" onClick={openNew}>
           + {addLabel}
         </Button>
       </div>
-      <DataTable columns={columns} rows={rows ?? []} loading={loading} getRowId={(r) => r.id} onEdit={openEdit} onDelete={setDeleting} />
+      <DataTable
+        columns={columns}
+        rows={rows ?? []}
+        loading={loading}
+        getRowId={(r) => r.id}
+        onEdit={openEdit}
+        onDelete={setDeleting}
+      />
 
       {editing && (
-        <Modal title={editing === 'new' ? addLabel : 'Изменить запись'} onClose={() => setEditing(null)}>
+        <SidePanel title={editing === 'new' ? addLabel : 'Изменить запись'} onClose={() => setEditing(null)}>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <FormRow label={fieldLabel} error={formState.errors[fieldName]?.message as string | undefined}>
-              <Input autoFocus {...register(fieldName as never, { required: 'Обязательное поле' })} />
+              <Input autoFocus {...register(fieldName, { required: 'Обязательное поле' })} />
             </FormRow>
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+              <Button type="button" variant="outline" onClick={() => setEditing(null)}>
                 Отмена
               </Button>
               <Button type="submit" disabled={formState.isSubmitting}>
@@ -117,7 +123,7 @@ export function SimpleRefTable<T extends Entity, TInput extends Record<string, u
               </Button>
             </div>
           </form>
-        </Modal>
+        </SidePanel>
       )}
 
       {deleting && (

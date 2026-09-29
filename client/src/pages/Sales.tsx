@@ -1,50 +1,63 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { PageHeader } from '../components/PageHeader';
-import { DataTable, type Column } from '../components/DataTable';
-import { Modal } from '../components/Modal';
-import { ConfirmDialog } from '../components/ConfirmDialog';
-import { Badge } from '../components/Badge';
-import { FilterBar } from '../components/FilterBar';
-import { Button, Checkbox, FormRow, Input, Select } from '../components/form';
-import { useToast } from '../context/ToastContext';
-import { ApiError } from '../api/client';
-import { formatDate, formatMoney, formatNumber, todayISO } from '../lib/format';
-import { salesHooks, clientsHooks, cementMarksHooks, ticketsHooks, useWarehouseBalance } from '../api/modules';
-import type { Sale } from '../types';
+import { ApiError } from '@/api/client';
+import { cementMarksHooks, clientsHooks, machinesHooks, salesHooks, ticketsHooks, useWarehouseBalance, zavodyHooks } from '@/api/modules';
+import { Badge } from '@/components/Badge';
+import { RHFButtonGroup } from '@/components/ButtonGroup';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { DataTable, type Column } from '@/components/DataTable';
+import { FilterBar } from '@/components/FilterBar';
+import { PageHeader } from '@/components/PageHeader';
+import { QuickAddClient } from '@/components/QuickAddClient';
+import { SidePanel } from '@/components/SidePanel';
+import { FormRow, Input, PlainSelect, RHFSelect } from '@/components/form';
+import { Button } from '@/components/ui/button';
+import { PACKAGING_LABELS, SALE_TYPE_OPTIONS, VEHICLE_TYPE_OPTIONS, VEHICLE_TYPE_LABELS } from '@/lib/constants';
+import { formatDate, formatMoney, formatNumber, todayISO } from '@/lib/format';
+import { normalizePlateNumber } from '@/lib/utils';
+import { useToast } from '@/lib/toast';
+import type { Sale } from '@/types';
 
 interface FormValues {
+  sale_type: 'CEMENT' | 'LOGISTICS';
   date: string;
   client_id: string;
-  source: 'warehouse' | 'ticket';
+  source: 'warehouse' | 'ticket' | '';
   ticket_id: string;
+  zavod_id: string;
   cement_mark_id: string;
-  type: 'рассыпной' | 'мешок';
-  tonnage: string;
+  packaging: 'MESHOK' | 'NAVAL';
   price_per_ton: string;
-  currency: 'UZS' | 'USD';
-  usd_rate: string;
-  has_logistics: boolean;
+  tonnage: string;
+  vehicle_type: 'CLIENT' | 'OWN' | 'HIRED' | '';
+  own_vehicle_id: string;
   machine_number: string;
-  machine_own: boolean;
-  logistics_price_per_ton: string;
+  carrier_name: string;
+  freight_price_per_ton: string;
+  hire_price_per_ton: string;
+  route: string;
+  comment: string;
 }
 
 const emptyForm = (): FormValues => ({
+  sale_type: 'CEMENT',
   date: todayISO(),
   client_id: '',
   source: 'warehouse',
   ticket_id: '',
+  zavod_id: '',
   cement_mark_id: '',
-  type: 'рассыпной',
-  tonnage: '',
+  packaging: 'MESHOK',
   price_per_ton: '',
-  currency: 'UZS',
-  usd_rate: '',
-  has_logistics: false,
+  tonnage: '',
+  vehicle_type: 'CLIENT',
+  own_vehicle_id: '',
   machine_number: '',
-  machine_own: true,
-  logistics_price_per_ton: '',
+  carrier_name: '',
+  freight_price_per_ton: '',
+  hire_price_per_ton: '',
+  route: '',
+  comment: '',
 });
 
 export function Sales() {
@@ -52,77 +65,116 @@ export function Sales() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [clientFilter, setClientFilter] = useState('');
-  const list = salesHooks.useList({ from: from || undefined, to: to || undefined, client_id: clientFilter || undefined });
+  const [typeFilter, setTypeFilter] = useState('');
+  const list = salesHooks.useList({
+    from: from || undefined,
+    to: to || undefined,
+    client_id: clientFilter || undefined,
+    sale_type: typeFilter || undefined,
+  });
   const create = salesHooks.useCreate();
   const update = salesHooks.useUpdate();
   const del = salesHooks.useDelete();
   const clients = clientsHooks.useList();
+  const zavody = zavodyHooks.useList();
   const cementMarks = cementMarksHooks.useList();
+  const machines = machinesHooks.useList();
   const tickets = ticketsHooks.useList({ status: 'active' });
   const balance = useWarehouseBalance();
 
   const [editing, setEditing] = useState<Sale | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Sale | null>(null);
-  const { register, handleSubmit, reset, watch, formState } = useForm<FormValues>({ defaultValues: emptyForm() });
+  const { register, control, handleSubmit, reset, watch, setValue, formState } = useForm<FormValues>({ defaultValues: emptyForm() });
 
+  const saleType = watch('sale_type');
   const source = watch('source');
-  const currency = watch('currency');
-  const hasLogistics = watch('has_logistics');
+  const vehicleType = watch('vehicle_type');
   const ticketId = watch('ticket_id');
+  const zavodId = watch('zavod_id');
   const cementMarkId = watch('cement_mark_id');
-  const type = watch('type');
+  const packaging = watch('packaging');
+  const machineNumber = watch('machine_number');
+  const tonnage = Number(watch('tonnage')) || 0;
+  const pricePerTon = Number(watch('price_per_ton')) || 0;
+  const freightPerTon = Number(watch('freight_price_per_ton')) || 0;
 
   const selectedTicket = (tickets.data ?? []).find((t) => String(t.id) === ticketId);
-  const currentBalance = (balance.data ?? []).find((b) => String(b.cement_mark_id) === cementMarkId && b.type === type);
+  const currentBalance = (balance.data ?? []).find(
+    (b) => String(b.zavod_id) === zavodId && String(b.cement_mark_id) === cementMarkId && b.packaging === packaging,
+  );
+
+  // Логистика: своя/наёмная определяется по совпадению номера со справочником (раздел 3 ТЗ, п.3) —
+  // подсказка на фронте, сервер решает окончательно сам.
+  const ownMachineNumbers = new Set((machines.data ?? []).map((m) => m.number));
+  const logisticsVehicleGuess = machineNumber && ownMachineNumbers.has(normalizePlateNumber(machineNumber)) ? 'OWN' : 'HIRED';
+
+  useEffect(() => {
+    if (saleType === 'LOGISTICS') setValue('vehicle_type', logisticsVehicleGuess);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saleType, logisticsVehicleGuess]);
 
   function openNew() {
     reset(emptyForm());
     setEditing('new');
   }
   function openEdit(row: Sale) {
+    if (row.source === 'direct') {
+      notify('Эта продажа связана с приходом «Напрямую» — измените её через Приход', 'error');
+      return;
+    }
     reset({
+      sale_type: row.sale_type,
       date: row.date,
       client_id: String(row.client_id),
-      source: row.source,
+      source: row.source === 'ticket' ? 'ticket' : 'warehouse',
       ticket_id: row.ticket_id ? String(row.ticket_id) : '',
-      cement_mark_id: String(row.cement_mark_id),
-      type: row.type,
+      zavod_id: row.zavod_id ? String(row.zavod_id) : '',
+      cement_mark_id: row.cement_mark_id ? String(row.cement_mark_id) : '',
+      packaging: row.packaging ?? 'MESHOK',
+      price_per_ton: row.price_per_ton ?? '',
       tonnage: row.tonnage,
-      price_per_ton: row.price_per_ton,
-      currency: row.currency,
-      usd_rate: row.usd_rate ?? '',
-      has_logistics: row.has_logistics,
+      vehicle_type: row.vehicle_type,
+      own_vehicle_id: row.own_vehicle_id ? String(row.own_vehicle_id) : '',
       machine_number: row.machine_number ?? '',
-      machine_own: row.machine_own ?? true,
-      logistics_price_per_ton: row.logistics_price_per_ton ?? '',
+      carrier_name: row.carrier_name ?? '',
+      freight_price_per_ton: row.freight_price_per_ton ?? '',
+      hire_price_per_ton: row.hire_price_per_ton ?? '',
+      route: row.route ?? '',
+      comment: row.comment ?? '',
     });
     setEditing(row);
   }
 
   async function onSubmit(data: FormValues) {
-    const ticket = (tickets.data ?? []).find((t) => String(t.id) === data.ticket_id);
     const payload = {
+      sale_type: data.sale_type,
       date: data.date,
       client_id: Number(data.client_id),
-      source: data.source,
-      ticket_id: data.source === 'ticket' ? Number(data.ticket_id) : null,
-      cement_mark_id: data.source === 'ticket' && ticket ? ticket.cement_mark_id : Number(data.cement_mark_id),
-      type: data.type,
+      source: data.sale_type === 'CEMENT' ? data.source : null,
+      ticket_id: data.sale_type === 'CEMENT' && data.source === 'ticket' ? Number(data.ticket_id) : null,
+      zavod_id: data.sale_type === 'CEMENT' && data.source === 'warehouse' ? Number(data.zavod_id) : null,
+      cement_mark_id: data.sale_type === 'CEMENT' && data.source === 'warehouse' ? Number(data.cement_mark_id) : null,
+      packaging: data.sale_type === 'CEMENT' && data.source === 'warehouse' ? data.packaging : null,
+      price_per_ton: data.sale_type === 'CEMENT' ? Number(data.price_per_ton) : null,
       tonnage: Number(data.tonnage),
-      price_per_ton: Number(data.price_per_ton),
-      currency: data.currency,
-      usd_rate: data.currency === 'USD' ? Number(data.usd_rate) : null,
-      has_logistics: data.has_logistics,
-      machine_number: data.has_logistics ? data.machine_number : null,
-      machine_own: data.has_logistics ? data.machine_own : null,
-      logistics_price_per_ton: data.has_logistics ? Number(data.logistics_price_per_ton) : null,
+      // Для LOGISTICS сервер определяет своя/наёмная сам по номеру — это значение только чтобы
+      // пройти валидацию формы (обязательное поле), сервер его игнорирует для этого типа.
+      vehicle_type: data.vehicle_type,
+      // own_vehicle_id — только для Цемента: для Логистики сервер сам находит машину по номеру.
+      own_vehicle_id: data.sale_type === 'CEMENT' && data.vehicle_type === 'OWN' ? Number(data.own_vehicle_id) : null,
+      machine_number: data.vehicle_type === 'OWN' && data.sale_type === 'CEMENT' ? null : data.machine_number || null,
+      carrier_name: data.vehicle_type === 'HIRED' ? data.carrier_name || null : null,
+      freight_price_per_ton: data.sale_type === 'LOGISTICS' || data.vehicle_type !== 'CLIENT' ? Number(data.freight_price_per_ton) : null,
+      hire_price_per_ton: data.vehicle_type === 'HIRED' ? Number(data.hire_price_per_ton) : null,
+      route: data.sale_type === 'LOGISTICS' ? data.route || null : null,
+      comment: data.comment || null,
     };
     try {
       if (editing === 'new') {
-        await create.mutateAsync(payload as never);
+        await create.mutateAsync(payload);
         notify('Продажа добавлена');
       } else if (editing) {
-        await update.mutateAsync({ id: editing.id, data: payload as never });
+        await update.mutateAsync({ id: editing.id, data: payload });
         notify('Сохранено');
       }
       setEditing(null);
@@ -143,147 +195,241 @@ export function Sales() {
     }
   }
 
+  const cementTotal = pricePerTon * tonnage;
+  const freightTotal = vehicleType === 'CLIENT' ? 0 : freightPerTon * tonnage;
+  const previewTotal = saleType === 'CEMENT' ? cementTotal + freightTotal : freightTotal;
+
   const columns: Column<Sale>[] = [
     { key: 'date', header: 'Дата', sortValue: (r) => r.date, render: (r) => formatDate(r.date) },
+    {
+      key: 'sale_type',
+      header: 'Тип',
+      render: (r) => (r.sale_type === 'CEMENT' ? <Badge tone="slate">Цемент</Badge> : <Badge tone="blue">Логистика</Badge>),
+    },
     { key: 'client_name', header: 'Клиент' },
-    { key: 'cement_mark_name', header: 'Марка' },
-    { key: 'type', header: 'Тип' },
-    { key: 'tonnage', header: 'Тоннаж', align: 'right', sortValue: (r) => Number(r.tonnage), render: (r) => `${formatNumber(r.tonnage, 2)} т` },
-    { key: 'price_per_ton', header: 'Цена/т', align: 'right', sortValue: (r) => Number(r.price_per_ton), render: (r) => formatMoney(r.price_per_ton, r.currency) },
-    { key: 'total_sum', header: 'Сумма', align: 'right', sortValue: (r) => Number(r.total_sum), render: (r) => formatMoney(r.total_sum, r.currency) },
-    { key: 'margin_total', header: 'Маржа', align: 'right', sortValue: (r) => Number(r.margin_total), render: (r) => formatMoney(r.margin_total) },
+    { key: 'cement_mark_name', header: 'Марка', render: (r) => r.cement_mark_name ?? '—' },
+    {
+      key: 'tonnage',
+      header: 'Тоннаж',
+      align: 'right',
+      sortValue: (r) => Number(r.tonnage),
+      render: (r) => `${formatNumber(r.tonnage, 3)} т`,
+    },
+    {
+      key: 'total_sum',
+      header: 'Сумма',
+      align: 'right',
+      sortValue: (r) => Number(r.total_sum),
+      render: (r) => formatMoney(r.total_sum),
+    },
+    {
+      key: 'margin_total',
+      header: 'Маржа',
+      align: 'right',
+      sortValue: (r) => Number(r.margin_total),
+      render: (r) => (r.sale_type === 'CEMENT' ? formatMoney(r.margin_total) : '—'),
+    },
     {
       key: 'source',
       header: 'Источник',
-      render: (r) => (r.source === 'ticket' ? <Badge tone="blue">{r.ticket_number}</Badge> : <Badge tone="slate">Склад</Badge>),
+      render: (r) => {
+        if (r.sale_type === 'LOGISTICS') return '—';
+        if (r.source === 'ticket') return <Badge tone="blue">{r.ticket_number}</Badge>;
+        if (r.source === 'direct') return <Badge tone="amber">Напрямую</Badge>;
+        return <Badge tone="slate">Склад</Badge>;
+      },
     },
     {
-      key: 'has_logistics',
-      header: 'Логистика',
-      render: (r) => (r.has_logistics ? <Badge tone="amber">{formatMoney(r.logistics_total ?? 0)}</Badge> : '—'),
+      key: 'vehicle_type',
+      header: 'Машина',
+      render: (r) => {
+        const plate = r.machine_number ?? r.own_vehicle_number;
+        return `${VEHICLE_TYPE_LABELS[r.vehicle_type]}${plate ? ` · ${plate}` : ''}`;
+      },
     },
   ];
 
   return (
     <div>
-      <PageHeader title="Продажи" subtitle="Со склада и с тикетов биржи" action={<Button onClick={openNew}>+ Новая продажа</Button>} />
+      <PageHeader title="Продажи" subtitle="Цемент и логистика — единая форма" action={<Button onClick={openNew}>+ Новая продажа</Button>} />
 
       <FilterBar from={from} to={to} onFromChange={setFrom} onToChange={setTo}>
-        <Select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="!w-48">
-          <option value="">Все клиенты</option>
-          {(clients.data ?? []).map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </Select>
+        <PlainSelect
+          value={clientFilter}
+          onValueChange={setClientFilter}
+          className="w-48"
+          placeholder="Все клиенты"
+          options={[{ value: '', label: 'Все клиенты' }, ...(clients.data ?? []).map((c) => ({ value: String(c.id), label: c.name }))]}
+        />
+        <PlainSelect
+          value={typeFilter}
+          onValueChange={setTypeFilter}
+          className="w-40"
+          placeholder="Все типы"
+          options={[{ value: '', label: 'Все типы' }, ...SALE_TYPE_OPTIONS]}
+        />
       </FilterBar>
 
-      <DataTable columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} onEdit={openEdit} onDelete={setDeleting} />
+      <DataTable columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} onEdit={openEdit} onDelete={(r) => (r.source === 'direct' ? notify('Эта продажа связана с приходом «Напрямую» — удалите её через Приход', 'error') : setDeleting(r))} />
 
       {editing && (
-        <Modal title={editing === 'new' ? 'Новая продажа' : 'Изменить продажу'} onClose={() => setEditing(null)} widthClass="max-w-xl">
+        <SidePanel title={editing === 'new' ? 'Новая продажа' : 'Изменить продажу'} onClose={() => setEditing(null)} widthClass="sm:max-w-xl">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <FormRow label="Тип продажи">
+              <RHFButtonGroup control={control} name="sale_type" options={SALE_TYPE_OPTIONS} disabled={editing !== 'new'} />
+            </FormRow>
+
             <div className="grid grid-cols-2 gap-3">
               <FormRow label="Дата">
                 <Input type="date" {...register('date', { required: true })} />
               </FormRow>
               <FormRow label="Клиент" error={formState.errors.client_id?.message}>
-                <Select {...register('client_id', { required: 'Выберите клиента' })}>
-                  <option value="">—</option>
-                  {(clients.data ?? []).map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </Select>
+                <RHFSelect control={control} name="client_id" options={(clients.data ?? []).map((c) => ({ value: String(c.id), label: c.name }))} />
               </FormRow>
             </div>
+            <QuickAddClient onCreated={(c) => setValue('client_id', String(c.id))} />
 
-            <FormRow label="Источник">
-              <div className="flex gap-4 pt-1">
-                <label className="flex items-center gap-1.5 text-sm">
-                  <input type="radio" value="warehouse" {...register('source')} /> Склад
-                </label>
-                <label className="flex items-center gap-1.5 text-sm">
-                  <input type="radio" value="ticket" {...register('source')} /> Тикет биржи
-                </label>
-              </div>
-            </FormRow>
+            {saleType === 'CEMENT' ? (
+              <>
+                <FormRow label="Источник">
+                  <RHFButtonGroup
+                    control={control}
+                    name="source"
+                    options={[
+                      { value: 'warehouse', label: 'Склад (Факт)' },
+                      { value: 'ticket', label: 'Тикет биржи' },
+                    ]}
+                  />
+                </FormRow>
 
-            {source === 'ticket' ? (
-              <FormRow label="Тикет" error={formState.errors.ticket_id?.message}>
-                <Select {...register('ticket_id', { required: 'Выберите тикет' })}>
-                  <option value="">—</option>
-                  {(tickets.data ?? []).map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.ticket_number} · {t.cement_mark_name} · остаток {formatNumber(t.remaining_tonnage, 2)} т
-                    </option>
-                  ))}
-                </Select>
-                {selectedTicket && <p className="mt-1 text-xs text-slate-400">Марка фиксирована тикетом: {selectedTicket.cement_mark_name}</p>}
-              </FormRow>
+                {source === 'ticket' ? (
+                  <FormRow label="Тикет" error={formState.errors.ticket_id?.message}>
+                    <RHFSelect
+                      control={control}
+                      name="ticket_id"
+                      options={(tickets.data ?? []).map((t) => ({
+                        value: String(t.id),
+                        label: `${t.ticket_number} · ${t.zavod_name} · ${t.cement_mark_name} · ${PACKAGING_LABELS[t.packaging]} · остаток ${formatNumber(t.remaining_tonnage, 3)} т`,
+                      }))}
+                    />
+                    {selectedTicket && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Завод/марка/упаковка зафиксированы тикетом: {selectedTicket.zavod_name}, {selectedTicket.cement_mark_name}, {PACKAGING_LABELS[selectedTicket.packaging]}
+                      </p>
+                    )}
+                  </FormRow>
+                ) : (
+                  <>
+                    <FormRow label="Завод" error={formState.errors.zavod_id?.message}>
+                      <RHFSelect control={control} name="zavod_id" options={(zavody.data ?? []).map((z) => ({ value: String(z.id), label: z.name }))} />
+                    </FormRow>
+                    <FormRow label="Марка цемента" error={formState.errors.cement_mark_id?.message}>
+                      <RHFSelect
+                        control={control}
+                        name="cement_mark_id"
+                        options={(cementMarks.data ?? []).map((m) => ({ value: String(m.id), label: m.name }))}
+                      />
+                    </FormRow>
+                    <FormRow label="Упаковка" error={formState.errors.packaging?.message}>
+                      <RHFButtonGroup
+                        control={control}
+                        name="packaging"
+                        options={[
+                          { value: 'MESHOK', label: 'Мешок' },
+                          { value: 'NAVAL', label: 'Навал' },
+                        ]}
+                      />
+                    </FormRow>
+                  </>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <FormRow label="Тоннаж" error={formState.errors.tonnage?.message}>
+                    <Input type="number" step="0.001" {...register('tonnage', { required: 'Укажите тоннаж' })} />
+                  </FormRow>
+                  <FormRow label="Цена за тонну" error={formState.errors.price_per_ton?.message}>
+                    <Input type="number" step="0.01" {...register('price_per_ton', { required: 'Укажите цену' })} />
+                  </FormRow>
+                </div>
+                {source === 'warehouse' && currentBalance && (
+                  <p className="-mt-2 text-xs text-muted-foreground">На складе доступно: {formatNumber(currentBalance.tonnage, 3)} т</p>
+                )}
+
+                <FormRow label="Тип машины">
+                  <RHFButtonGroup control={control} name="vehicle_type" options={VEHICLE_TYPE_OPTIONS} />
+                </FormRow>
+                {vehicleType === 'CLIENT' && (
+                  <FormRow label="Номер машины" error={formState.errors.machine_number?.message}>
+                    <Input {...register('machine_number', { required: 'Укажите номер машины' })} />
+                  </FormRow>
+                )}
+                {vehicleType === 'OWN' && (
+                  <>
+                    <FormRow label="Машина" error={formState.errors.own_vehicle_id?.message}>
+                      <RHFSelect control={control} name="own_vehicle_id" options={(machines.data ?? []).map((m) => ({ value: String(m.id), label: m.number }))} />
+                    </FormRow>
+                    <FormRow label="Цена перевозки за тонну" error={formState.errors.freight_price_per_ton?.message}>
+                      <Input type="number" step="0.01" {...register('freight_price_per_ton')} />
+                    </FormRow>
+                  </>
+                )}
+                {vehicleType === 'HIRED' && (
+                  <>
+                    <FormRow label="Номер машины" error={formState.errors.machine_number?.message}>
+                      <Input {...register('machine_number', { required: 'Укажите номер машины' })} />
+                    </FormRow>
+                    <FormRow label="Перевозчик" error={formState.errors.carrier_name?.message}>
+                      <Input {...register('carrier_name', { required: 'Укажите перевозчика' })} />
+                    </FormRow>
+                    <FormRow label="Цена перевозки за тонну (клиенту)" error={formState.errors.freight_price_per_ton?.message}>
+                      <Input type="number" step="0.01" {...register('freight_price_per_ton')} />
+                    </FormRow>
+                    <FormRow label="Цена найма за тонну (перевозчику)" error={formState.errors.hire_price_per_ton?.message}>
+                      <Input type="number" step="0.01" {...register('hire_price_per_ton')} />
+                    </FormRow>
+                  </>
+                )}
+              </>
             ) : (
-              <FormRow label="Марка цемента" error={formState.errors.cement_mark_id?.message}>
-                <Select {...register('cement_mark_id', { required: 'Выберите марку' })}>
-                  <option value="">—</option>
-                  {(cementMarks.data ?? []).map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormRow>
+              <>
+                <FormRow label="Номер машины" error={formState.errors.machine_number?.message}>
+                  <Input {...register('machine_number', { required: 'Укажите номер машины' })} placeholder="Определится: своя или наёмная" />
+                </FormRow>
+                <p className="-mt-2 text-xs text-muted-foreground">
+                  {machineNumber ? (logisticsVehicleGuess === 'OWN' ? 'Своя машина (найдена в справочнике)' : 'Наёмная (номера нет в справочнике «Свои машины»)') : 'Введите номер — тип определится сам'}
+                </p>
+                {vehicleType === 'HIRED' && (
+                  <FormRow label="Перевозчик" error={formState.errors.carrier_name?.message}>
+                    <Input {...register('carrier_name', { required: 'Укажите перевозчика' })} />
+                  </FormRow>
+                )}
+                <FormRow label="Маршрут (необязательно)">
+                  <Input {...register('route')} placeholder="Откуда — куда" />
+                </FormRow>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormRow label="Тоннаж" error={formState.errors.tonnage?.message}>
+                    <Input type="number" step="0.001" {...register('tonnage', { required: 'Укажите тоннаж' })} />
+                  </FormRow>
+                  <FormRow label="Цена за тонну перевозки" error={formState.errors.freight_price_per_ton?.message}>
+                    <Input type="number" step="0.01" {...register('freight_price_per_ton', { required: 'Укажите цену' })} />
+                  </FormRow>
+                </div>
+                {vehicleType === 'HIRED' && (
+                  <FormRow label="Цена найма за тонну (перевозчику)" error={formState.errors.hire_price_per_ton?.message}>
+                    <Input type="number" step="0.01" {...register('hire_price_per_ton', { required: 'Укажите цену найма' })} />
+                  </FormRow>
+                )}
+              </>
             )}
 
-            <FormRow label="Тип">
-              <Select {...register('type', { required: true })}>
-                <option value="рассыпной">Рассыпной</option>
-                <option value="мешок">Мешок</option>
-              </Select>
+            <FormRow label="Комментарий (необязательно)">
+              <Input {...register('comment')} />
             </FormRow>
 
-            <div className="grid grid-cols-2 gap-3">
-              <FormRow label="Тоннаж" error={formState.errors.tonnage?.message}>
-                <Input type="number" step="0.001" {...register('tonnage', { required: 'Укажите тоннаж' })} />
-              </FormRow>
-              <FormRow label="Цена за тонну" error={formState.errors.price_per_ton?.message}>
-                <Input type="number" step="0.01" {...register('price_per_ton', { required: 'Укажите цену' })} />
-              </FormRow>
-            </div>
-            {source === 'warehouse' && currentBalance && (
-              <p className="-mt-2 text-xs text-slate-400">На складе доступно: {formatNumber(currentBalance.tonnage, 2)} т</p>
-            )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <FormRow label="Валюта">
-                <Select {...register('currency', { required: true })}>
-                  <option value="UZS">UZS (сум)</option>
-                  <option value="USD">USD</option>
-                </Select>
-              </FormRow>
-              {currency === 'USD' && (
-                <FormRow label="Курс доллара" error={formState.errors.usd_rate?.message}>
-                  <Input type="number" step="0.01" {...register('usd_rate', { required: 'Укажите курс' })} />
-                </FormRow>
-              )}
-            </div>
-
-            <Checkbox label="С доставкой (логистика)" {...register('has_logistics')} />
-            {hasLogistics && (
-              <div className="space-y-3 rounded-lg bg-slate-50 p-3">
-                <FormRow label="Номер машины" error={formState.errors.machine_number?.message}>
-                  <Input {...register('machine_number', { required: hasLogistics ? 'Укажите номер машины' : false })} />
-                </FormRow>
-                <Checkbox label="Своя машина" {...register('machine_own')} />
-                <FormRow label="Цена доставки за тонну" error={formState.errors.logistics_price_per_ton?.message}>
-                  <Input type="number" step="0.01" {...register('logistics_price_per_ton', { required: hasLogistics ? 'Укажите цену' : false })} />
-                </FormRow>
-              </div>
-            )}
+            <div className="rounded-md bg-muted p-3 text-base font-semibold">Итого к оплате: {formatMoney(previewTotal)}</div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+              <Button type="button" variant="outline" onClick={() => setEditing(null)}>
                 Отмена
               </Button>
               <Button type="submit" disabled={formState.isSubmitting}>
@@ -291,7 +437,7 @@ export function Sales() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </SidePanel>
       )}
 
       {deleting && (

@@ -1,5 +1,15 @@
-import clsx from 'clsx';
+import { ArrowDown, ArrowUp, ChevronsUpDown, Pencil, Trash2 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
+import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 export interface Column<T> {
   key: string;
@@ -21,7 +31,16 @@ interface DataTableProps<T> {
   getRowId: (row: T) => number | string;
 }
 
-export function DataTable<T>({ columns, rows, loading, emptyMessage = 'Нет записей', onEdit, onDelete, extraRowAction, getRowId }: DataTableProps<T>) {
+export function DataTable<T>({
+  columns,
+  rows,
+  loading,
+  emptyMessage = 'Нет записей',
+  onEdit,
+  onDelete,
+  extraRowAction,
+  getRowId,
+}: DataTableProps<T>) {
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
 
   const sorted = useMemo(() => {
@@ -32,7 +51,8 @@ export function DataTable<T>({ columns, rows, loading, emptyMessage = 'Нет з
     copy.sort((a, b) => {
       const av = col.sortValue!(a);
       const bv = col.sortValue!(b);
-      const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv), 'ru');
+      const cmp =
+        typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv), 'ru');
       return sort.dir === 'asc' ? cmp : -cmp;
     });
     return copy;
@@ -49,80 +69,91 @@ export function DataTable<T>({ columns, rows, loading, emptyMessage = 'Нет з
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-      <table className="w-full min-w-max text-sm">
-        <thead>
-          <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+    <div className="rounded-md border overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
             {columns.map((col) => (
-              <th
+              <TableHead
                 key={col.key}
                 onClick={() => toggleSort(col)}
-                className={clsx(
-                  'whitespace-nowrap px-4 py-3 font-medium',
+                className={cn(
+                  'whitespace-nowrap',
                   col.align === 'right' && 'text-right',
                   col.align === 'center' && 'text-center',
-                  col.sortValue && 'cursor-pointer select-none hover:text-slate-800',
+                  col.sortValue && 'cursor-pointer select-none',
                 )}
               >
-                {col.header}
-                {sort?.key === col.key && <span className="ml-1">{sort.dir === 'asc' ? '↑' : '↓'}</span>}
-              </th>
+                <span className={cn('inline-flex items-center gap-1', col.align === 'right' && 'flex-row-reverse')}>
+                  {col.header}
+                  {col.sortValue &&
+                    (sort?.key === col.key ? (
+                      sort.dir === 'asc' ? (
+                        <ArrowUp className="size-3.5" />
+                      ) : (
+                        <ArrowDown className="size-3.5" />
+                      )
+                    ) : (
+                      <ChevronsUpDown className="size-3.5 opacity-40" />
+                    ))}
+                </span>
+              </TableHead>
             ))}
-            {hasActions && <th className="px-4 py-3" />}
-          </tr>
-        </thead>
-        <tbody>
+            {hasActions && <TableHead className="w-[1%]" />}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {loading && (
-            <tr>
-              <td colSpan={columns.length + 1} className="px-4 py-8 text-center text-slate-400">
+            <TableRow>
+              <TableCell colSpan={columns.length + 1} className="h-24 text-center text-muted-foreground">
                 Загрузка…
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           )}
           {!loading && sorted.length === 0 && (
-            <tr>
-              <td colSpan={columns.length + 1} className="px-4 py-8 text-center text-slate-400">
+            <TableRow>
+              <TableCell colSpan={columns.length + 1} className="h-24 text-center text-muted-foreground">
                 {emptyMessage}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           )}
           {!loading &&
             sorted.map((row) => (
-              <tr key={getRowId(row)} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+              <TableRow key={getRowId(row)}>
                 {columns.map((col) => (
-                  <td
+                  <TableCell
                     key={col.key}
-                    className={clsx(
-                      'whitespace-nowrap px-4 py-2.5 text-slate-700',
+                    className={cn(
+                      'whitespace-nowrap',
                       col.align === 'right' && 'text-right tabular-nums',
                       col.align === 'center' && 'text-center',
                       col.className,
                     )}
                   >
                     {col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? '')}
-                  </td>
+                  </TableCell>
                 ))}
                 {hasActions && (
-                  <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                  <TableCell className="whitespace-nowrap text-right">
                     <div className="flex justify-end gap-1">
                       {extraRowAction?.(row)}
                       {onEdit && (
-                        <button onClick={() => onEdit(row)} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-600" title="Изменить">
-                          ✏️
-                        </button>
+                        <Button variant="ghost" size="icon" onClick={() => onEdit(row)} aria-label="Изменить">
+                          <Pencil className="size-4" />
+                        </Button>
                       )}
                       {onDelete && (
-                        <button onClick={() => onDelete(row)} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Удалить">
-                          🗑️
-                        </button>
+                        <Button variant="ghost" size="icon" onClick={() => onDelete(row)} aria-label="Удалить">
+                          <Trash2 className="size-4" />
+                        </Button>
                       )}
                     </div>
-                  </td>
+                  </TableCell>
                 )}
-              </tr>
+              </TableRow>
             ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

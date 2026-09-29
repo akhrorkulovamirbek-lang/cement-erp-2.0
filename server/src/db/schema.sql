@@ -4,33 +4,190 @@ CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
+  full_name TEXT NOT NULL DEFAULT '',
+  role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('admin', 'manager', 'operator', 'cashier')),
+  phone TEXT,
+  active BOOLEAN NOT NULL DEFAULT true,
+  failed_login_count INTEGER NOT NULL DEFAULT 0,
+  locked_until TIMESTAMPTZ,
+  created_by INTEGER REFERENCES users(id),
+  updated_by INTEGER REFERENCES users(id),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'admin';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_by INTEGER REFERENCES users(id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 -- Справочники
 
 CREATE TABLE IF NOT EXISTS zavody (
   id SERIAL PRIMARY KEY,
   name TEXT UNIQUE NOT NULL,
+  region TEXT,
+  phone TEXT,
+  initial_debt NUMERIC(16,2) NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE zavody ADD COLUMN IF NOT EXISTS region TEXT;
+ALTER TABLE zavody ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE zavody ADD COLUMN IF NOT EXISTS initial_debt NUMERIC(16,2) NOT NULL DEFAULT 0;
+ALTER TABLE zavody ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
 
 CREATE TABLE IF NOT EXISTS clients (
   id SERIAL PRIMARY KEY,
   name TEXT UNIQUE NOT NULL,
   phone TEXT,
+  contact_person TEXT,
+  inn TEXT,
+  initial_debt NUMERIC(16,2) NOT NULL DEFAULT 0,
+  comment TEXT,
+  active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS contact_person TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS inn TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS initial_debt NUMERIC(16,2) NOT NULL DEFAULT 0;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS comment TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
 
 CREATE TABLE IF NOT EXISTS cement_marks (
   id SERIAL PRIMARY KEY,
   name TEXT UNIQUE NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE cement_marks ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
 
+-- "Свои машины"
 CREATE TABLE IF NOT EXISTS machines (
   id SERIAL PRIMARY KEY,
   number TEXT UNIQUE NOT NULL,
+  model TEXT,
+  driver TEXT,
+  capacity_tons NUMERIC(8,3),
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE machines ADD COLUMN IF NOT EXISTS model TEXT;
+ALTER TABLE machines ADD COLUMN IF NOT EXISTS driver TEXT;
+ALTER TABLE machines ADD COLUMN IF NOT EXISTS capacity_tons NUMERIC(8,3);
+ALTER TABLE machines ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
+
+-- Категории расходов логистики (админ может добавлять). Перевозчики намеренно не справочник —
+-- см. sales.carrier_name: это просто текст, живёт, пока есть долг, не хранится как контрагент.
+CREATE TABLE IF NOT EXISTS logistics_expense_categories (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Банковские счета (для будущего модуля «Обналичивание» — таблица есть, экран пока скрыт)
+CREATE TABLE IF NOT EXISTS bank_accounts (
+  id SERIAL PRIMARY KEY,
+  bank_name TEXT NOT NULL,
+  account_number TEXT NOT NULL,
+  display_name TEXT UNIQUE NOT NULL,
+  initial_balance NUMERIC(16,2) NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Ядро: права, настройки, журнал действий
+
+CREATE TABLE IF NOT EXISTS permissions (
+  role TEXT NOT NULL CHECK (role IN ('admin', 'manager', 'operator', 'cashier')),
+  resource_code TEXT NOT NULL,
+  allowed BOOLEAN NOT NULL DEFAULT false,
+  PRIMARY KEY (role, resource_code)
+);
+
+CREATE TABLE IF NOT EXISTS module_settings (
+  code TEXT PRIMARY KEY,
+  enabled BOOLEAN NOT NULL DEFAULT true,
+  updated_by INTEGER REFERENCES users(id),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_by INTEGER REFERENCES users(id),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id BIGSERIAL PRIMARY KEY,
+  at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  user_id INTEGER REFERENCES users(id),
+  action TEXT NOT NULL,
+  object_type TEXT NOT NULL,
+  object_id TEXT,
+  object_label TEXT,
+  before JSONB,
+  after JSONB,
+  ip TEXT,
+  user_agent TEXT
+);
+
+-- Журнал нельзя изменить или удалить, даже админом (раздел 8.4 ТЗ).
+CREATE OR REPLACE FUNCTION audit_log_immutable() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'audit_log is append-only';
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS audit_log_no_update ON audit_log;
+CREATE TRIGGER audit_log_no_update BEFORE UPDATE OR DELETE ON audit_log
+  FOR EACH ROW EXECUTE FUNCTION audit_log_immutable();
+
+-- Регистры (раздел 9.5 ТЗ) — инфраструктура для Фазы 2/3, документы ещё не пишут сюда.
+
+CREATE TABLE IF NOT EXISTS stock_movement (
+  id BIGSERIAL PRIMARY KEY,
+  date DATE NOT NULL,
+  document_type TEXT NOT NULL,
+  document_id INTEGER NOT NULL,
+  warehouse TEXT NOT NULL CHECK (warehouse IN ('FACT', 'DIRECT', 'TICKET')),
+  zavod_id INTEGER REFERENCES zavody(id),
+  cement_mark_id INTEGER REFERENCES cement_marks(id),
+  packaging TEXT CHECK (packaging IN ('MESHOK', 'NAVAL')),
+  ticket_id INTEGER,
+  tons NUMERIC(12,3) NOT NULL,
+  cost_per_ton NUMERIC(14,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS settlement_movement (
+  id BIGSERIAL PRIMARY KEY,
+  date DATE NOT NULL,
+  document_type TEXT NOT NULL,
+  document_id INTEGER NOT NULL,
+  counterparty_type TEXT NOT NULL CHECK (counterparty_type IN ('CLIENT', 'ZAVOD', 'CARRIER')),
+  -- CLIENT/ZAVOD пишут counterparty_id (FK по смыслу, без constraint — тип общий на оба);
+  -- CARRIER — не справочник (см. sales.carrier_name), пишет counterparty_name.
+  counterparty_id INTEGER,
+  counterparty_name TEXT,
+  contour TEXT NOT NULL CHECK (contour IN ('TRADE', 'CASH_SERVICE')),
+  amount NUMERIC(16,2) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS money_movement (
+  id BIGSERIAL PRIMARY KEY,
+  date DATE NOT NULL,
+  document_type TEXT NOT NULL,
+  document_id INTEGER NOT NULL,
+  account TEXT NOT NULL,
+  amount NUMERIC(16,2) NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -55,6 +212,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   ticket_number TEXT NOT NULL,
   zavod_id INTEGER NOT NULL REFERENCES zavody(id),
   cement_mark_id INTEGER NOT NULL REFERENCES cement_marks(id),
+  packaging TEXT NOT NULL DEFAULT 'MESHOK' CHECK (packaging IN ('MESHOK', 'NAVAL')),
   bought_tonnage NUMERIC(12,3) NOT NULL CHECK (bought_tonnage > 0),
   price_per_ton NUMERIC(14,2) NOT NULL CHECK (price_per_ton > 0),
   bought_sum NUMERIC(16,2) NOT NULL,
@@ -67,6 +225,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   manually_closed BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS packaging TEXT NOT NULL DEFAULT 'MESHOK' CHECK (packaging IN ('MESHOK', 'NAVAL'));
 
 CREATE TABLE IF NOT EXISTS broker_operations (
   id SERIAL PRIMARY KEY,
@@ -78,72 +237,73 @@ CREATE TABLE IF NOT EXISTS broker_operations (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Склад
+-- Склад. warehouse: FACT (обычный приход) / DIRECT (напрямую клиенту, склад не меняется,
+-- см. linked_sale_id — при DIRECT создаётся и связывается со строкой sales одной транзакцией).
 
 CREATE TABLE IF NOT EXISTS incoming (
   id SERIAL PRIMARY KEY,
   date DATE NOT NULL,
-  machine_number TEXT NOT NULL,
-  machine_own BOOLEAN NOT NULL DEFAULT true,
+  warehouse TEXT NOT NULL DEFAULT 'FACT' CHECK (warehouse IN ('FACT', 'DIRECT')),
+  zavod_id INTEGER NOT NULL REFERENCES zavody(id),
   cement_mark_id INTEGER NOT NULL REFERENCES cement_marks(id),
-  type TEXT NOT NULL CHECK (type IN ('рассыпной', 'мешок')),
+  packaging TEXT NOT NULL CHECK (packaging IN ('MESHOK', 'NAVAL')),
   tonnage NUMERIC(12,3) NOT NULL CHECK (tonnage > 0),
   price_per_ton NUMERIC(14,2) NOT NULL CHECK (price_per_ton > 0),
   total_sum NUMERIC(16,2) NOT NULL,
-  zavod_id INTEGER NOT NULL REFERENCES zavody(id),
-  warehouse_received BOOLEAN NOT NULL DEFAULT true,
+  machine_number TEXT,
+  comment TEXT,
+  linked_sale_id INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Остаток «Факт» — по ключу завод + марка + упаковка (раздел 5 ТЗ).
 CREATE TABLE IF NOT EXISTS warehouse_balance (
   id SERIAL PRIMARY KEY,
+  zavod_id INTEGER NOT NULL REFERENCES zavody(id),
   cement_mark_id INTEGER NOT NULL REFERENCES cement_marks(id),
-  type TEXT NOT NULL CHECK (type IN ('рассыпной', 'мешок')),
+  packaging TEXT NOT NULL CHECK (packaging IN ('MESHOK', 'NAVAL')),
   tonnage NUMERIC(12,3) NOT NULL DEFAULT 0,
   avg_cost_per_ton NUMERIC(14,2) NOT NULL DEFAULT 0,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (cement_mark_id, type)
+  UNIQUE (zavod_id, cement_mark_id, packaging)
 );
 
--- Продажи
-
+-- Продажи: единая форма Цемент/Логистика (раздел 3 ТЗ). vehicle_type — тип машины у рейса
+-- (общий для обеих веток и для Напрямую-приходов): CLIENT (клиент сам забирает, доставки нет),
+-- OWN (своя машина, own_vehicle_id), HIRED (наёмная — carrier_name текстом, не справочник:
+-- см. решение пользователя не заводить «Перевозчиков» как отдельную сущность).
 CREATE TABLE IF NOT EXISTS sales (
   id SERIAL PRIMARY KEY,
   date DATE NOT NULL,
+  sale_type TEXT NOT NULL DEFAULT 'CEMENT' CHECK (sale_type IN ('CEMENT', 'LOGISTICS')),
   client_id INTEGER NOT NULL REFERENCES clients(id),
-  cement_mark_id INTEGER NOT NULL REFERENCES cement_marks(id),
-  type TEXT NOT NULL CHECK (type IN ('рассыпной', 'мешок')),
-  tonnage NUMERIC(12,3) NOT NULL CHECK (tonnage > 0),
-  price_per_ton NUMERIC(14,2) NOT NULL CHECK (price_per_ton > 0),
-  total_sum NUMERIC(16,2) NOT NULL,
-  currency TEXT NOT NULL DEFAULT 'UZS' CHECK (currency IN ('UZS', 'USD')),
-  usd_rate NUMERIC(12,2),
-  source TEXT NOT NULL CHECK (source IN ('warehouse', 'ticket')),
+  source TEXT CHECK (source IN ('warehouse', 'ticket', 'direct')),
+  zavod_id INTEGER REFERENCES zavody(id),
+  cement_mark_id INTEGER REFERENCES cement_marks(id),
+  packaging TEXT CHECK (packaging IN ('MESHOK', 'NAVAL')),
   ticket_id INTEGER REFERENCES tickets(id),
+  linked_purchase_id INTEGER REFERENCES incoming(id),
+  tonnage NUMERIC(12,3) NOT NULL CHECK (tonnage > 0),
+  price_per_ton NUMERIC(14,2),
   cost_per_ton NUMERIC(14,2) NOT NULL DEFAULT 0,
   cost_total NUMERIC(16,2) NOT NULL DEFAULT 0,
   margin_total NUMERIC(16,2) NOT NULL DEFAULT 0,
-  has_logistics BOOLEAN NOT NULL DEFAULT false,
+  vehicle_type TEXT NOT NULL CHECK (vehicle_type IN ('CLIENT', 'OWN', 'HIRED')),
+  own_vehicle_id INTEGER REFERENCES machines(id),
   machine_number TEXT,
-  machine_own BOOLEAN,
-  logistics_price_per_ton NUMERIC(14,2),
-  logistics_total NUMERIC(16,2),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- Логистика (самостоятельные услуги перевозки)
-
-CREATE TABLE IF NOT EXISTS logistics (
-  id SERIAL PRIMARY KEY,
-  date DATE NOT NULL,
-  machine_number TEXT NOT NULL,
-  machine_own BOOLEAN NOT NULL DEFAULT true,
-  tonnage NUMERIC(12,3) NOT NULL CHECK (tonnage > 0),
-  price_per_ton NUMERIC(14,2) NOT NULL CHECK (price_per_ton > 0),
+  carrier_name TEXT,
+  freight_price_per_ton NUMERIC(14,2),
+  hire_price_per_ton NUMERIC(14,2),
+  route TEXT,
   total_sum NUMERIC(16,2) NOT NULL,
-  client_id INTEGER REFERENCES clients(id),
+  comment TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+DO $$ BEGIN
+  ALTER TABLE incoming ADD CONSTRAINT incoming_linked_sale_fk FOREIGN KEY (linked_sale_id) REFERENCES sales(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Касса
 
@@ -184,4 +344,13 @@ CREATE INDEX IF NOT EXISTS idx_incoming_date ON incoming(date);
 CREATE INDEX IF NOT EXISTS idx_tickets_zavod ON tickets(zavod_id);
 CREATE INDEX IF NOT EXISTS idx_cash_income_client ON cash_income(client_id);
 CREATE INDEX IF NOT EXISTS idx_cash_expense_zavod ON cash_expense(zavod_id);
-CREATE INDEX IF NOT EXISTS idx_logistics_client ON logistics(client_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_at ON audit_log(at);
+CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_object ON audit_log(object_type, object_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movement_key ON stock_movement(warehouse, zavod_id, cement_mark_id, packaging);
+CREATE INDEX IF NOT EXISTS idx_stock_movement_ticket ON stock_movement(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movement_document ON stock_movement(document_type, document_id);
+CREATE INDEX IF NOT EXISTS idx_settlement_movement_counterparty ON settlement_movement(counterparty_type, counterparty_id, contour);
+CREATE INDEX IF NOT EXISTS idx_settlement_movement_document ON settlement_movement(document_type, document_id);
+CREATE INDEX IF NOT EXISTS idx_money_movement_account ON money_movement(account);
+CREATE INDEX IF NOT EXISTS idx_money_movement_document ON money_movement(document_type, document_id);

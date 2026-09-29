@@ -9,7 +9,7 @@ export const salesRouter = Router();
 salesRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const { client_id, cement_mark_id, from, to, source } = req.query;
+    const { client_id, cement_mark_id, from, to, source, sale_type } = req.query;
     const conditions: string[] = [];
     const params: unknown[] = [];
     if (client_id) {
@@ -32,13 +32,20 @@ salesRouter.get(
       params.push(source);
       conditions.push(`s.source = $${params.length}`);
     }
+    if (sale_type) {
+      params.push(sale_type);
+      conditions.push(`s.sale_type = $${params.length}`);
+    }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
-      `SELECT s.*, c.name AS client_name, cm.name AS cement_mark_name, t.ticket_number
+      `SELECT s.*, c.name AS client_name, z.name AS zavod_name, cm.name AS cement_mark_name,
+              t.ticket_number, ov.number AS own_vehicle_number
        FROM sales s
        JOIN clients c ON c.id = s.client_id
-       JOIN cement_marks cm ON cm.id = s.cement_mark_id
+       LEFT JOIN zavody z ON z.id = s.zavod_id
+       LEFT JOIN cement_marks cm ON cm.id = s.cement_mark_id
        LEFT JOIN tickets t ON t.id = s.ticket_id
+       LEFT JOIN machines ov ON ov.id = s.own_vehicle_id
        ${where}
        ORDER BY s.date DESC, s.id DESC`,
       params,

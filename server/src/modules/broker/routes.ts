@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool, withTransaction } from '../../db/pool.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { requirePermission } from '../../middleware/permission.js';
 import { applyBrokerOperation } from './service.js';
 
 export const brokerRouter = Router();
@@ -23,6 +24,8 @@ const replenishSchema = z.object({
 
 brokerRouter.post(
   '/replenish',
+  // Пополнение — движение денег, строже, чем просмотр/покупка тикета (доступных через Приход).
+  requirePermission('broker'),
   asyncHandler(async (req, res) => {
     const data = replenishSchema.parse(req.body);
     const op = await withTransaction((client) =>

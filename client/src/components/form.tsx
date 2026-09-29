@@ -1,58 +1,131 @@
-import clsx from 'clsx';
-import { forwardRef, type ReactNode, type SelectHTMLAttributes, type InputHTMLAttributes } from 'react';
+import type { ReactNode } from 'react';
+import { Controller, type Control, type FieldValues, type Path } from 'react-hook-form';
+import { Checkbox as UiCheckbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import {
+  Select as UiSelect,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
-export function FormRow({ label, error, children, className }: { label: string; error?: string; children: ReactNode; className?: string }) {
-  return (
-    <label className={clsx('block', className)}>
-      <span className="mb-1 block text-xs font-medium text-slate-600">{label}</span>
-      {children}
-      {error && <span className="mt-1 block text-xs text-red-600">{error}</span>}
-    </label>
-  );
-}
+export { Input } from '@/components/ui/input';
 
-const baseInputClass =
-  'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100';
-
-export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { hasError?: boolean }>(
-  ({ className, hasError, ...props }, ref) => (
-    <input ref={ref} className={clsx(baseInputClass, hasError && 'border-red-400', className)} {...props} />
-  ),
-);
-Input.displayName = 'Input';
-
-export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement> & { hasError?: boolean }>(
-  ({ className, hasError, children, ...props }, ref) => (
-    <select ref={ref} className={clsx(baseInputClass, 'bg-white', hasError && 'border-red-400', className)} {...props}>
-      {children}
-    </select>
-  ),
-);
-Select.displayName = 'Select';
-
-export function Checkbox({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string }) {
-  return (
-    <label className="flex items-center gap-2 text-sm text-slate-700">
-      <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500" {...props} />
-      {label}
-    </label>
-  );
-}
-
-export function Button({
-  variant = 'primary',
+export function FormRow({
+  label,
+  error,
+  children,
   className,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' }) {
+}: {
+  label: string;
+  error?: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <button
-      className={clsx(
-        'rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-        variant === 'primary' && 'bg-brand-600 text-white hover:bg-brand-700',
-        variant === 'secondary' && 'border border-slate-200 text-slate-700 hover:bg-slate-50',
-        className,
+    <div className={className}>
+      <Label className="mb-1.5 block">{label}</Label>
+      {children}
+      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+export interface SelectOption {
+  value: string;
+  label: string;
+}
+
+const ALL_SENTINEL = '__all__';
+
+/** Uncontrolled-of-RHF shadcn Select for filters etc. An option with value "" is allowed
+ * (rendered via an internal sentinel, since Radix forbids empty-string item values). */
+export function PlainSelect({
+  value,
+  onValueChange,
+  options,
+  placeholder = '—',
+  className,
+}: {
+  value: string;
+  onValueChange: (v: string) => void;
+  options: SelectOption[];
+  placeholder?: string;
+  className?: string;
+}) {
+  return (
+    <UiSelect value={value === '' ? ALL_SENTINEL : value} onValueChange={(v) => onValueChange(v === ALL_SENTINEL ? '' : v)}>
+      <SelectTrigger className={className}>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o.value || ALL_SENTINEL} value={o.value === '' ? ALL_SENTINEL : o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </UiSelect>
+  );
+}
+
+export function RHFSelect<T extends FieldValues>({
+  control,
+  name,
+  options,
+  placeholder = '—',
+  disabled,
+  className,
+}: {
+  control: Control<T>;
+  name: Path<T>;
+  options: SelectOption[];
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <UiSelect value={field.value ? String(field.value) : ''} onValueChange={field.onChange} disabled={disabled}>
+          <SelectTrigger className={className ?? 'w-full'}>
+            <SelectValue placeholder={placeholder} />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </UiSelect>
       )}
-      {...props}
+    />
+  );
+}
+
+export function RHFCheckbox<T extends FieldValues>({
+  control,
+  name,
+  label,
+}: {
+  control: Control<T>;
+  name: Path<T>;
+  label: string;
+}) {
+  return (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <label className="flex items-center gap-2 text-sm">
+          <UiCheckbox checked={Boolean(field.value)} onCheckedChange={(v) => field.onChange(v === true)} />
+          {label}
+        </label>
+      )}
     />
   );
 }

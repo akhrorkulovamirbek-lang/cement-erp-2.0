@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components/PageHeader';
-import { DataTable, type Column } from '../components/DataTable';
-import { Modal } from '../components/Modal';
-import { ConfirmDialog } from '../components/ConfirmDialog';
-import { Button, FormRow, Input } from '../components/form';
-import { Badge } from '../components/Badge';
-import { clientsHooks, useClientBalances } from '../api/modules';
-import { formatMoney } from '../lib/format';
-import { useToast } from '../context/ToastContext';
-import { ApiError } from '../api/client';
-import type { Client, ClientBalance } from '../types';
+import { ApiError } from '@/api/client';
+import { clientsHooks, useClientBalances } from '@/api/modules';
+import { Badge } from '@/components/Badge';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { DataTable, type Column } from '@/components/DataTable';
+import { PageHeader } from '@/components/PageHeader';
+import { SidePanel } from '@/components/SidePanel';
+import { FormRow, Input, RHFCheckbox } from '@/components/form';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { formatMoney } from '@/lib/format';
+import { useToast } from '@/lib/toast';
+import type { Client, ClientBalance } from '@/types';
 
 interface Row extends Client {
   purchased: string;
@@ -22,7 +24,14 @@ interface Row extends Client {
 interface FormValues {
   name: string;
   phone: string;
+  contact_person: string;
+  inn: string;
+  initial_debt: string;
+  comment: string;
+  active: boolean;
 }
+
+const emptyForm = (): FormValues => ({ name: '', phone: '', contact_person: '', inn: '', initial_debt: '0', comment: '', active: true });
 
 export function Clients() {
   const { notify } = useToast();
@@ -34,7 +43,7 @@ export function Clients() {
 
   const [editing, setEditing] = useState<Client | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Client | null>(null);
-  const { register, handleSubmit, reset, formState } = useForm<FormValues>();
+  const { register, control, handleSubmit, reset, formState } = useForm<FormValues>({ defaultValues: emptyForm() });
 
   const balanceMap = new Map<number, ClientBalance>((balances.data ?? []).map((b) => [b.id, b]));
   const rows: Row[] = (list.data ?? []).map((c) => {
@@ -43,21 +52,38 @@ export function Clients() {
   });
 
   function openNew() {
-    reset({ name: '', phone: '' });
+    reset(emptyForm());
     setEditing('new');
   }
   function openEdit(row: Row) {
-    reset({ name: row.name, phone: row.phone ?? '' });
+    reset({
+      name: row.name,
+      phone: row.phone ?? '',
+      contact_person: row.contact_person ?? '',
+      inn: row.inn ?? '',
+      initial_debt: row.initial_debt,
+      comment: row.comment ?? '',
+      active: row.active,
+    });
     setEditing(row);
   }
 
   async function onSubmit(data: FormValues) {
+    const payload = {
+      name: data.name,
+      phone: data.phone || null,
+      contact_person: data.contact_person || null,
+      inn: data.inn || null,
+      initial_debt: Number(data.initial_debt || 0),
+      comment: data.comment || null,
+      active: data.active,
+    };
     try {
       if (editing === 'new') {
-        await create.mutateAsync({ name: data.name, phone: data.phone || null });
+        await create.mutateAsync(payload);
         notify('Клиент добавлен');
       } else if (editing) {
-        await update.mutateAsync({ id: editing.id, data: { name: data.name, phone: data.phone || null } });
+        await update.mutateAsync({ id: editing.id, data: payload });
         notify('Сохранено');
       }
       setEditing(null);
@@ -84,14 +110,26 @@ export function Clients() {
       header: 'Клиент',
       sortValue: (r) => r.name,
       render: (r) => (
-        <Link to={`/clients/${r.id}`} className="font-medium text-brand-700 hover:underline">
+        <Link to={`/clients/${r.id}`} className="font-medium text-primary hover:underline">
           {r.name}
         </Link>
       ),
     },
     { key: 'phone', header: 'Телефон', render: (r) => r.phone || '—' },
-    { key: 'purchased', header: 'Куплено', align: 'right', sortValue: (r) => Number(r.purchased), render: (r) => formatMoney(r.purchased) },
-    { key: 'paid', header: 'Оплачено', align: 'right', sortValue: (r) => Number(r.paid), render: (r) => formatMoney(r.paid) },
+    {
+      key: 'purchased',
+      header: 'Куплено',
+      align: 'right',
+      sortValue: (r) => Number(r.purchased),
+      render: (r) => formatMoney(r.purchased),
+    },
+    {
+      key: 'paid',
+      header: 'Оплачено',
+      align: 'right',
+      sortValue: (r) => Number(r.paid),
+      render: (r) => formatMoney(r.paid),
+    },
     {
       key: 'balance',
       header: 'Долг',
@@ -100,8 +138,13 @@ export function Clients() {
       render: (r) => {
         const n = Number(r.balance);
         if (n <= 0) return <Badge tone="green">Без долга</Badge>;
-        return <span className="font-semibold text-red-600">{formatMoney(n)}</span>;
+        return <span className="font-semibold text-destructive">{formatMoney(n)}</span>;
       },
+    },
+    {
+      key: 'active',
+      header: 'Статус',
+      render: (r) => (r.active ? <Badge tone="green">Активен</Badge> : <Badge tone="slate">Выключен</Badge>),
     },
   ];
 
@@ -113,10 +156,17 @@ export function Clients() {
         action={<Button onClick={openNew}>+ Добавить клиента</Button>}
       />
 
-      <DataTable columns={columns} rows={rows} loading={list.isLoading || balances.isLoading} getRowId={(r) => r.id} onEdit={openEdit} onDelete={setDeleting} />
+      <DataTable
+        columns={columns}
+        rows={rows}
+        loading={list.isLoading || balances.isLoading}
+        getRowId={(r) => r.id}
+        onEdit={openEdit}
+        onDelete={setDeleting}
+      />
 
       {editing && (
-        <Modal title={editing === 'new' ? 'Новый клиент' : 'Изменить клиента'} onClose={() => setEditing(null)}>
+        <SidePanel title={editing === 'new' ? 'Новый клиент' : 'Изменить клиента'} onClose={() => setEditing(null)}>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <FormRow label="Имя" error={formState.errors.name?.message}>
               <Input autoFocus {...register('name', { required: 'Укажите имя' })} />
@@ -124,8 +174,21 @@ export function Clients() {
             <FormRow label="Телефон (необязательно)">
               <Input {...register('phone')} placeholder="+998 90 123 45 67" />
             </FormRow>
+            <FormRow label="Контактное лицо (необязательно)">
+              <Input {...register('contact_person')} />
+            </FormRow>
+            <FormRow label="ИНН (необязательно)">
+              <Input {...register('inn')} />
+            </FormRow>
+            <FormRow label="Начальный долг">
+              <Input type="number" step="0.01" {...register('initial_debt')} />
+            </FormRow>
+            <FormRow label="Комментарий (необязательно)">
+              <Textarea {...register('comment')} rows={2} />
+            </FormRow>
+            <RHFCheckbox control={control} name="active" label="Активен" />
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+              <Button type="button" variant="outline" onClick={() => setEditing(null)}>
                 Отмена
               </Button>
               <Button type="submit" disabled={formState.isSubmitting}>
@@ -133,13 +196,13 @@ export function Clients() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </SidePanel>
       )}
 
       {deleting && (
         <ConfirmDialog
           title="Удалить клиента?"
-          message={`Удалить «${deleting.name}»? Это возможно только если у клиента нет продаж и платежей.`}
+          message={`Удалить «${deleting.name}»? Это возможно только если у клиента нет продаж и платежей. Чтобы скрыть клиента из списков, но сохранить историю — снимите галочку «Активен».`}
           onConfirm={onDelete}
           onCancel={() => setDeleting(null)}
         />

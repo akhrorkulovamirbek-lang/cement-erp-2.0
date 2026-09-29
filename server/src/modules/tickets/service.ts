@@ -11,9 +11,9 @@ export async function createTicket(client: pg.PoolClient, data: CreateTicketInpu
   const boughtSum = data.tonnage * data.price_per_ton;
 
   const { rows } = await client.query(
-    `INSERT INTO tickets (date, ticket_number, zavod_id, cement_mark_id, bought_tonnage, price_per_ton, bought_sum, remaining_tonnage, remaining_sum, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $5, $7, 'active') RETURNING *`,
-    [data.date, data.ticket_number, data.zavod_id, data.cement_mark_id, data.tonnage, data.price_per_ton, boughtSum],
+    `INSERT INTO tickets (date, ticket_number, zavod_id, cement_mark_id, packaging, bought_tonnage, price_per_ton, bought_sum, remaining_tonnage, remaining_sum, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $6, $8, 'active') RETURNING *`,
+    [data.date, data.ticket_number, data.zavod_id, data.cement_mark_id, data.packaging, data.tonnage, data.price_per_ton, boughtSum],
   );
   const ticket = rows[0];
 
@@ -28,10 +28,12 @@ export async function createTicket(client: pg.PoolClient, data: CreateTicketInpu
   return ticket;
 }
 
-/** Recalculates cost_per_ton/cost_total/margin_total for every sale made from this ticket. */
+/** Recalculates cost_per_ton/cost_total/margin_total for every sale made from this ticket.
+ * margin — только по цементу: tonnage*price_per_ton - cost_total, а не total_sum - cost_total,
+ * т.к. total_sum теперь включает доставку (раздел 3 ТЗ, формула итога). */
 async function recomputeTicketSales(client: pg.PoolClient, ticketId: number, pricePerTon: number) {
   await client.query(
-    `UPDATE sales SET cost_per_ton = $1, cost_total = $1 * tonnage, margin_total = total_sum - ($1 * tonnage)
+    `UPDATE sales SET cost_per_ton = $1, cost_total = $1 * tonnage, margin_total = (price_per_ton * tonnage) - ($1 * tonnage)
      WHERE source = 'ticket' AND ticket_id = $2`,
     [pricePerTon, ticketId],
   );

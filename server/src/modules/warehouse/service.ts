@@ -18,24 +18,28 @@ interface OutEvent {
 type StockEvent = IncomingEvent | OutEvent;
 
 /**
- * Replays the full incoming/sales history for one (cement_mark_id, type) pair to derive
- * the current warehouse balance and moving-average cost, and backfills cost/margin on every
- * affected warehouse-sourced sale. Run inside the same transaction as any write that touches
- * incoming or warehouse sales for this mark+type — this is what keeps edit/delete consistent
+ * Replays the full incoming/sales history for one (zavod_id, cement_mark_id, packaging) key —
+ * раздел 5 ТЗ: остаток «Факт» считается именно по этой тройке, не только по марке+упаковке —
+ * to derive the current warehouse balance and moving-average cost, and backfills cost/margin on
+ * every affected warehouse-sourced sale. Run inside the same transaction as any write that
+ * touches incoming or warehouse sales for this key — this is what keeps edit/delete consistent
  * without needing to hand-write reversal math for a moving average.
  */
 export async function recomputeWarehouseBalance(
   client: pg.PoolClient,
+  zavodId: number,
   cementMarkId: number,
-  type: string,
+  packaging: string,
 ) {
   const incomingRes = await client.query(
-    `SELECT id, date, tonnage, price_per_ton, created_at FROM incoming WHERE cement_mark_id = $1 AND type = $2`,
-    [cementMarkId, type],
+    `SELECT id, date, tonnage, price_per_ton, created_at FROM incoming
+     WHERE warehouse = 'FACT' AND zavod_id = $1 AND cement_mark_id = $2 AND packaging = $3`,
+    [zavodId, cementMarkId, packaging],
   );
   const salesRes = await client.query(
-    `SELECT id, date, tonnage, created_at FROM sales WHERE cement_mark_id = $1 AND type = $2 AND source = 'warehouse'`,
-    [cementMarkId, type],
+    `SELECT id, date, tonnage, created_at FROM sales
+     WHERE source = 'warehouse' AND zavod_id = $1 AND cement_mark_id = $2 AND packaging = $3`,
+    [zavodId, cementMarkId, packaging],
   );
 
   const events: StockEvent[] = [
@@ -84,16 +88,18 @@ export async function recomputeWarehouseBalance(
   const finalAvg = qty > 1e-6 ? value / qty : 0;
 
   await client.query(
-    `INSERT INTO warehouse_balance (cement_mark_id, type, tonnage, avg_cost_per_ton, updated_at)
-     VALUES ($1, $2, $3, $4, now())
-     ON CONFLICT (cement_mark_id, type)
-     DO UPDATE SET tonnage = $3, avg_cost_per_ton = $4, updated_at = now()`,
-    [cementMarkId, type, qty, finalAvg],
+    `INSERT INTO warehouse_balance (zavod_id, cement_mark_id, packaging, tonnage, avg_cost_per_ton, updated_at)
+     VALUES ($1, $2, $3, $4, $5, now())
+     ON CONFLICT (zavod_id, cement_mark_id, packaging)
+     DO UPDATE SET tonnage = $4, avg_cost_per_ton = $5, updated_at = now()`,
+    [zavodId, cementMarkId, packaging, qty, finalAvg],
   );
 
   for (const u of saleUpdates) {
+    // margin — только по цементу, без учёта доставки, которая теперь входит в total_sum
+    // (раздел 3 ТЗ, формула итога): margin = tonnage*price_per_ton - cost_total, не total_sum - cost_total.
     await client.query(
-      `UPDATE sales SET cost_per_ton = $1, cost_total = $1 * tonnage, margin_total = total_sum - ($1 * tonnage) WHERE id = $2`,
+      `UPDATE sales SET cost_per_ton = $1, cost_total = $1 * tonnage, margin_total = (price_per_ton * tonnage) - ($1 * tonnage) WHERE id = $2`,
       [u.costPerTon, u.id],
     );
   }
@@ -101,12 +107,13 @@ export async function recomputeWarehouseBalance(
 
 export async function getWarehouseBalance(
   client: pg.Pool | pg.PoolClient,
+  zavodId: number,
   cementMarkId: number,
-  type: string,
+  packaging: string,
 ): Promise<{ tonnage: number; avgCostPerTon: number }> {
   const { rows } = await client.query(
-    `SELECT tonnage, avg_cost_per_ton FROM warehouse_balance WHERE cement_mark_id = $1 AND type = $2`,
-    [cementMarkId, type],
+    `SELECT tonnage, avg_cost_per_ton FROM warehouse_balance WHERE zavod_id = $1 AND cement_mark_id = $2 AND packaging = $3`,
+    [zavodId, cementMarkId, packaging],
   );
   if (!rows[0]) return { tonnage: 0, avgCostPerTon: 0 };
   return { tonnage: Number(rows[0].tonnage), avgCostPerTon: Number(rows[0].avg_cost_per_ton) };

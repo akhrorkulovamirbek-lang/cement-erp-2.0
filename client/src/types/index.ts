@@ -1,6 +1,12 @@
+import type { PackagingType, SaleType, VehicleType } from '@/lib/constants';
+
 export interface Zavod {
   id: number;
   name: string;
+  region: string | null;
+  phone: string | null;
+  initial_debt: string;
+  active: boolean;
   created_at: string;
 }
 
@@ -8,22 +14,117 @@ export interface Client {
   id: number;
   name: string;
   phone: string | null;
+  contact_person: string | null;
+  inn: string | null;
+  initial_debt: string;
+  comment: string | null;
+  active: boolean;
   created_at: string;
 }
 
 export interface CementMark {
   id: number;
   name: string;
+  active: boolean;
   created_at: string;
 }
 
 export interface Machine {
   id: number;
   number: string;
+  model: string | null;
+  driver: string | null;
+  capacity_tons: string | null;
+  active: boolean;
   created_at: string;
 }
 
-export type CementType = 'рассыпной' | 'мешок';
+export interface BankAccount {
+  id: number;
+  bank_name: string;
+  account_number: string;
+  display_name: string;
+  initial_balance: string;
+  active: boolean;
+  created_at: string;
+}
+
+export interface ExpenseCategory {
+  id: number;
+  name: string;
+  active: boolean;
+  created_at: string;
+}
+
+export const ROLES = ['admin', 'manager', 'operator', 'cashier'] as const;
+export type UserRole = (typeof ROLES)[number];
+
+export const ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'Администратор',
+  manager: 'Руководитель',
+  operator: 'Оператор',
+  cashier: 'Кассир',
+};
+
+export interface AppUser {
+  id: number;
+  username: string;
+  full_name: string;
+  role: UserRole;
+  phone: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const RESOURCE_LABELS: Record<string, string> = {
+  references: 'Справочники',
+  incoming: 'Приход',
+  sales: 'Продажа',
+  cash: 'Касса',
+  broker: 'Брокерский счёт',
+  reports: 'Отчёты',
+  users: 'Пользователи',
+  settings: 'Настройки',
+  auditLog: 'Журнал действий',
+};
+
+export interface ModuleSetting {
+  code: string;
+  name: string;
+  description: string;
+  whenDisabled: string;
+  defaultEnabled: boolean;
+  enabled: boolean;
+}
+
+export interface PermissionRoleRow {
+  role: UserRole;
+  roleLabel: string;
+  resources: { resourceCode: string; resourceLabel: string; allowed: boolean }[];
+}
+
+export interface AppSettingsMap {
+  session_timeout_minutes?: string;
+  broker_allow_negative?: string;
+}
+
+export interface AuditLogEntry {
+  id: number;
+  at: string;
+  user_id: number | null;
+  user_full_name: string | null;
+  user_username: string | null;
+  action: string;
+  object_type: string;
+  object_id: string | null;
+  object_label: string | null;
+  before: unknown;
+  after: unknown;
+  ip: string | null;
+  user_agent: string | null;
+}
+
 export type Currency = 'UZS' | 'USD';
 export type PaymentType = 'перечисление' | 'наличка' | 'карта';
 
@@ -52,6 +153,7 @@ export interface Ticket {
   zavod_name: string;
   cement_mark_id: number;
   cement_mark_name: string;
+  packaging: PackagingType;
   bought_tonnage: string;
   price_per_ton: string;
   bought_sum: string;
@@ -61,28 +163,33 @@ export interface Ticket {
   created_at: string;
 }
 
+export type IncomingWarehouse = 'FACT' | 'DIRECT';
+
 export interface Incoming {
   id: number;
   date: string;
-  machine_number: string;
-  machine_own: boolean;
+  warehouse: IncomingWarehouse;
+  zavod_id: number;
+  zavod_name: string;
   cement_mark_id: number;
   cement_mark_name: string;
-  type: CementType;
+  packaging: PackagingType;
   tonnage: string;
   price_per_ton: string;
   total_sum: string;
-  zavod_id: number;
-  zavod_name: string;
-  warehouse_received: boolean;
+  machine_number: string | null;
+  comment: string | null;
+  linked_sale_id: number | null;
   created_at: string;
 }
 
 export interface WarehouseBalance {
   id: number;
+  zavod_id: number;
+  zavod_name: string;
   cement_mark_id: number;
   cement_mark_name: string;
-  type: CementType;
+  packaging: PackagingType;
   tonnage: string;
   avg_cost_per_ton: string;
   updated_at: string;
@@ -91,40 +198,33 @@ export interface WarehouseBalance {
 export interface Sale {
   id: number;
   date: string;
+  sale_type: SaleType;
   client_id: number;
   client_name: string;
-  cement_mark_id: number;
-  cement_mark_name: string;
-  type: CementType;
-  tonnage: string;
-  price_per_ton: string;
-  total_sum: string;
-  currency: Currency;
-  usd_rate: string | null;
-  source: 'warehouse' | 'ticket';
+  source: 'warehouse' | 'ticket' | 'direct' | null;
+  zavod_id: number | null;
+  zavod_name: string | null;
+  cement_mark_id: number | null;
+  cement_mark_name: string | null;
+  packaging: PackagingType | null;
   ticket_id: number | null;
   ticket_number: string | null;
+  linked_purchase_id: number | null;
+  tonnage: string;
+  price_per_ton: string | null;
   cost_per_ton: string;
   cost_total: string;
   margin_total: string;
-  has_logistics: boolean;
+  vehicle_type: VehicleType;
+  own_vehicle_id: number | null;
+  own_vehicle_number: string | null;
   machine_number: string | null;
-  machine_own: boolean | null;
-  logistics_price_per_ton: string | null;
-  logistics_total: string | null;
-  created_at: string;
-}
-
-export interface Logistics {
-  id: number;
-  date: string;
-  machine_number: string;
-  machine_own: boolean;
-  tonnage: string;
-  price_per_ton: string;
+  carrier_name: string | null;
+  freight_price_per_ton: string | null;
+  hire_price_per_ton: string | null;
+  route: string | null;
   total_sum: string;
-  client_id: number | null;
-  client_name: string | null;
+  comment: string | null;
   created_at: string;
 }
 
