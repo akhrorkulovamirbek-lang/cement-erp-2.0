@@ -14,4 +14,5 @@ export const setPermissionSchema = z.object({
 export const updateAppSettingsSchema = z.object({
   session_timeout_minutes: z.coerce.number().int().min(5).max(10080).optional(),
   broker_allow_negative: z.coerce.boolean().optional(),
+  cash_service_default_commission_percent: z.coerce.number().min(0).max(100).optional(),
 });

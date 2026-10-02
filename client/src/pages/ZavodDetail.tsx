@@ -10,7 +10,7 @@ import type { CashExpense } from '@/types';
 interface PurchaseRow {
   key: string;
   date: string;
-  source: 'FACT' | 'DIRECT' | 'ticket';
+  source: 'FACT' | 'DIRECT' | 'CLIENT_GOODS' | 'ticket';
   cementMarkName: string;
   tonnage: string;
   pricePerTon: string;
@@ -63,6 +63,7 @@ export function ZavodDetail() {
       render: (r) => {
         if (r.source === 'ticket') return <Badge tone="blue">Тикет</Badge>;
         if (r.source === 'DIRECT') return <Badge tone="amber">Напрямую</Badge>;
+        if (r.source === 'CLIENT_GOODS') return <Badge tone="blue">От клиента (не в долг заводу)</Badge>;
         return <Badge tone="slate">Факт</Badge>;
       },
     },

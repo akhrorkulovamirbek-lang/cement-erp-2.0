@@ -16,7 +16,7 @@ import { PACKAGING_LABELS, SALE_TYPE_OPTIONS, VEHICLE_TYPE_OPTIONS, VEHICLE_TYPE
 import { formatDate, formatMoney, formatNumber, todayISO } from '@/lib/format';
 import { normalizePlateNumber } from '@/lib/utils';
 import { useToast } from '@/lib/toast';
-import type { Sale } from '@/types';
+import type { Client, Sale } from '@/types';
 
 interface FormValues {
   sale_type: 'CEMENT' | 'LOGISTICS';
@@ -81,10 +81,26 @@ export function Sales() {
   const machines = machinesHooks.useList();
   const tickets = ticketsHooks.useList({ status: 'active' });
   const balance = useWarehouseBalance();
+  // См. комментарий у аналогичного стейта в Incoming.tsx — без этого Radix Select сбрасывает
+  // только что выбранного нового клиента обратно в пустое значение.
+  const [justAddedClient, setJustAddedClient] = useState<Client | null>(null);
+  const clientOptions = (
+    justAddedClient && !(clients.data ?? []).some((c) => c.id === justAddedClient.id)
+      ? [justAddedClient, ...(clients.data ?? [])]
+      : (clients.data ?? [])
+  ).map((c) => ({ value: String(c.id), label: c.name }));
 
   const [editing, setEditing] = useState<Sale | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Sale | null>(null);
   const { register, control, handleSubmit, reset, watch, setValue, formState } = useForm<FormValues>({ defaultValues: emptyForm() });
+
+  function selectClient(client: Client) {
+    setJustAddedClient(client);
+    setValue('client_id', String(client.id), { shouldValidate: true });
+    // См. комментарий в Incoming.tsx: Radix Select иногда один раз сам откатывает программно
+    // установленное значение вскоре после первого рендера — подтверждаем ещё раз чуть позже.
+    setTimeout(() => setValue('client_id', String(client.id), { shouldValidate: true }), 250);
+  }
 
   const saleType = watch('sale_type');
   const source = watch('source');
@@ -284,10 +300,10 @@ export function Sales() {
                 <Input type="date" {...register('date', { required: true })} />
               </FormRow>
               <FormRow label="Клиент" error={formState.errors.client_id?.message}>
-                <RHFSelect control={control} name="client_id" options={(clients.data ?? []).map((c) => ({ value: String(c.id), label: c.name }))} />
+                <RHFSelect control={control} name="client_id" options={clientOptions} />
               </FormRow>
             </div>
-            <QuickAddClient onCreated={(c) => setValue('client_id', String(c.id))} />
+            <QuickAddClient onCreated={selectClient} />
 
             {saleType === 'CEMENT' ? (
               <>

@@ -1,4 +1,6 @@
 import {
+  Banknote,
+  ChartBar,
   History,
   LayoutDashboard,
   LogOut,
@@ -43,6 +45,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/incoming', label: 'Приход', icon: Package, resource: 'incoming' },
   { to: '/sales', label: 'Продажи', icon: Wallet, resource: 'sales' },
   { to: '/cash', label: 'Касса', icon: Wallet, resource: 'cash' },
+  { to: '/cash-service', label: 'Обналичивание', icon: Banknote, resource: 'cashService' },
+  { to: '/reports', label: 'Отчёты', icon: ChartBar, resource: 'reports' },
   { to: '/counterparties', label: 'Контрагенты', icon: UsersIcon, resource: 'references' },
   { to: '/audit-log', label: 'Журнал действий', icon: History, resource: 'auditLog' },
   { to: '/settings', label: 'Настройки', icon: SettingsIcon, resource: 'settings' },

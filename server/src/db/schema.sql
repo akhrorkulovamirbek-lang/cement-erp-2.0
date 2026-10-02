@@ -90,16 +90,37 @@ CREATE TABLE IF NOT EXISTS logistics_expense_categories (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Банковские счета (для будущего модуля «Обналичивание» — таблица есть, экран пока скрыт)
+-- Банковские счета — используются модулем «Обналичивание» (см. cash_service_operations ниже).
 CREATE TABLE IF NOT EXISTS bank_accounts (
   id SERIAL PRIMARY KEY,
   bank_name TEXT NOT NULL,
   account_number TEXT NOT NULL,
   display_name TEXT UNIQUE NOT NULL,
   initial_balance NUMERIC(16,2) NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'UZS' CHECK (currency IN ('UZS', 'USD')),
+  -- Текущий баланс — ведётся транзакционно (см. cashService/service.ts), не редактируется напрямую.
+  balance NUMERIC(16,2),
   active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE bank_accounts ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'UZS';
+ALTER TABLE bank_accounts ADD COLUMN IF NOT EXISTS balance NUMERIC(16,2);
+UPDATE bank_accounts SET balance = initial_balance WHERE balance IS NULL;
+ALTER TABLE bank_accounts ALTER COLUMN balance SET NOT NULL;
+ALTER TABLE bank_accounts ALTER COLUMN balance SET DEFAULT 0;
+
+-- bankAccountsRouter (createRefRouter) не включает balance в список колонок INSERT — счёт
+-- всегда должен стартовать с balance = initial_balance, независимо от того, кто создаёт запись.
+CREATE OR REPLACE FUNCTION bank_accounts_init_balance() RETURNS trigger AS $$
+BEGIN
+  NEW.balance := NEW.initial_balance;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS bank_accounts_set_initial_balance ON bank_accounts;
+CREATE TRIGGER bank_accounts_set_initial_balance BEFORE INSERT ON bank_accounts
+  FOR EACH ROW EXECUTE FUNCTION bank_accounts_init_balance();
 
 -- Ядро: права, настройки, журнал действий
 
@@ -238,12 +259,16 @@ CREATE TABLE IF NOT EXISTS broker_operations (
 );
 
 -- Склад. warehouse: FACT (обычный приход) / DIRECT (напрямую клиенту, склад не меняется,
--- см. linked_sale_id — при DIRECT создаётся и связывается со строкой sales одной транзакцией).
+-- см. linked_sale_id — при DIRECT создаётся и связывается со строкой sales одной транзакцией) /
+-- CLIENT_GOODS (раздел 9.2 ТЗ «Оплата товаром» — клиент гасит долг цементом вместо денег;
+-- механически как FACT (тот же склад/себестоимость), но привязан к client_id и уменьшает долг
+-- клиента, не завода — см. UZS_INCOME-подобный union в reports/routes.ts и исключение из
+-- zavod-balance).
 
 CREATE TABLE IF NOT EXISTS incoming (
   id SERIAL PRIMARY KEY,
   date DATE NOT NULL,
-  warehouse TEXT NOT NULL DEFAULT 'FACT' CHECK (warehouse IN ('FACT', 'DIRECT')),
+  warehouse TEXT NOT NULL DEFAULT 'FACT' CHECK (warehouse IN ('FACT', 'DIRECT', 'CLIENT_GOODS')),
   zavod_id INTEGER NOT NULL REFERENCES zavody(id),
   cement_mark_id INTEGER NOT NULL REFERENCES cement_marks(id),
   packaging TEXT NOT NULL CHECK (packaging IN ('MESHOK', 'NAVAL')),
@@ -253,8 +278,13 @@ CREATE TABLE IF NOT EXISTS incoming (
   machine_number TEXT,
   comment TEXT,
   linked_sale_id INTEGER,
+  -- Только для warehouse='CLIENT_GOODS' — кто отдал нам этот цемент в счёт своего долга.
+  client_id INTEGER REFERENCES clients(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE incoming DROP CONSTRAINT IF EXISTS incoming_warehouse_check;
+ALTER TABLE incoming ADD CONSTRAINT incoming_warehouse_check CHECK (warehouse IN ('FACT', 'DIRECT', 'CLIENT_GOODS'));
+ALTER TABLE incoming ADD COLUMN IF NOT EXISTS client_id INTEGER REFERENCES clients(id);
 
 -- Остаток «Факт» — по ключу завод + марка + упаковка (раздел 5 ТЗ).
 CREATE TABLE IF NOT EXISTS warehouse_balance (
@@ -325,10 +355,13 @@ CREATE TABLE IF NOT EXISTS cash_income (
 CREATE TABLE IF NOT EXISTS cash_expense (
   id SERIAL PRIMARY KEY,
   date DATE NOT NULL,
-  category TEXT NOT NULL CHECK (category IN ('цемент', 'логистика', 'прочее')),
+  category TEXT NOT NULL CHECK (category IN ('цемент', 'логистика', 'перевозчик', 'прочее')),
   machine_number TEXT,
   zavod_id INTEGER REFERENCES zavody(id),
-  expense_type TEXT NOT NULL,
+  -- Перевозчик — не справочник (см. sales.carrier_name), просто текст.
+  carrier_name TEXT,
+  -- expense_type необязателен для category='перевозчик' (там роль типа расхода играет carrier_name).
+  expense_type TEXT,
   amount NUMERIC(16,2) NOT NULL CHECK (amount > 0),
   currency TEXT NOT NULL DEFAULT 'UZS' CHECK (currency IN ('UZS', 'USD')),
   usd_rate NUMERIC(12,2),
@@ -336,6 +369,33 @@ CREATE TABLE IF NOT EXISTS cash_expense (
   comment TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE cash_expense ADD COLUMN IF NOT EXISTS carrier_name TEXT;
+ALTER TABLE cash_expense ALTER COLUMN expense_type DROP NOT NULL;
+ALTER TABLE cash_expense DROP CONSTRAINT IF EXISTS cash_expense_category_check;
+ALTER TABLE cash_expense ADD CONSTRAINT cash_expense_category_check CHECK (category IN ('цемент', 'логистика', 'перевозчик', 'прочее', 'обналичивание'));
+
+-- Обналичивание: приём перевода на банковский счёт, выдача наличных за вычетом комиссии.
+-- Выдача отражается связанной строкой cash_expense (category='обналичивание') — см.
+-- cashService/service.ts; эта строка редактируется/удаляется только со стороны Обналичивания
+-- (см. 409-guard в cash/routes.ts), как и sales.source='direct' редактируется только из Прихода.
+CREATE TABLE IF NOT EXISTS cash_service_operations (
+  id SERIAL PRIMARY KEY,
+  date DATE NOT NULL,
+  bank_account_id INTEGER NOT NULL REFERENCES bank_accounts(id),
+  -- Контрагент — не справочник, просто текст (та же логика, что и sales.carrier_name).
+  counterparty_name TEXT,
+  counterparty_phone TEXT,
+  transfer_amount NUMERIC(16,2) NOT NULL CHECK (transfer_amount > 0),
+  currency TEXT NOT NULL DEFAULT 'UZS' CHECK (currency IN ('UZS', 'USD')),
+  usd_rate NUMERIC(12,2),
+  commission_amount NUMERIC(16,2) NOT NULL DEFAULT 0 CHECK (commission_amount >= 0),
+  payout_amount NUMERIC(16,2) NOT NULL,
+  related_cash_expense_id INTEGER REFERENCES cash_expense(id) ON DELETE SET NULL,
+  comment TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_cash_service_bank_account ON cash_service_operations(bank_account_id);
+CREATE INDEX IF NOT EXISTS idx_cash_service_date ON cash_service_operations(date);
 
 CREATE INDEX IF NOT EXISTS idx_sales_client ON sales(client_id);
 CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(date);

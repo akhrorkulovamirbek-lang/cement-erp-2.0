@@ -45,8 +45,33 @@ export interface BankAccount {
   account_number: string;
   display_name: string;
   initial_balance: string;
+  currency: Currency;
+  balance: string;
   active: boolean;
   created_at: string;
+}
+
+export interface CashServiceOperation {
+  id: number;
+  date: string;
+  bank_account_id: number;
+  bank_account_name: string;
+  counterparty_name: string | null;
+  counterparty_phone: string | null;
+  transfer_amount: string;
+  currency: Currency;
+  usd_rate: string | null;
+  commission_amount: string;
+  payout_amount: string;
+  related_cash_expense_id: number | null;
+  comment: string | null;
+  created_at: string;
+}
+
+export interface CashServiceSummary {
+  commissionTotal: number;
+  transferTotal: number;
+  count: number;
 }
 
 export interface ExpenseCategory {
@@ -107,6 +132,7 @@ export interface PermissionRoleRow {
 export interface AppSettingsMap {
   session_timeout_minutes?: string;
   broker_allow_negative?: string;
+  cash_service_default_commission_percent?: string;
 }
 
 export interface AuditLogEntry {
@@ -163,7 +189,7 @@ export interface Ticket {
   created_at: string;
 }
 
-export type IncomingWarehouse = 'FACT' | 'DIRECT';
+export type IncomingWarehouse = 'FACT' | 'DIRECT' | 'CLIENT_GOODS';
 
 export interface Incoming {
   id: number;
@@ -178,6 +204,8 @@ export interface Incoming {
   price_per_ton: string;
   total_sum: string;
   machine_number: string | null;
+  client_id: number | null;
+  client_name: string | null;
   comment: string | null;
   linked_sale_id: number | null;
   created_at: string;
@@ -246,11 +274,12 @@ export interface CashIncome {
 export interface CashExpense {
   id: number;
   date: string;
-  category: 'цемент' | 'логистика' | 'прочее';
+  category: 'цемент' | 'логистика' | 'перевозчик' | 'прочее';
   machine_number: string | null;
   zavod_id: number | null;
   zavod_name: string | null;
-  expense_type: string;
+  carrier_name: string | null;
+  expense_type: string | null;
   amount: string;
   currency: Currency;
   usd_rate: string | null;
@@ -274,6 +303,51 @@ export interface ZavodBalance {
   purchased: string;
   paid: string;
   balance: string;
+}
+
+export interface CarrierBalance {
+  name: string;
+  owed: string;
+  paid: string;
+  balance: string;
+}
+
+export interface DebtsSummary {
+  clientDebtTotal: number;
+  zavodDebtTotal: number;
+  carrierDebtTotal: number;
+  topClients: { id: number; name: string; balance: string }[];
+  topZavody: { id: number; name: string; balance: string }[];
+  topCarriers: { name: string; balance: string }[];
+}
+
+export interface CashBalances {
+  наличка: number;
+  карта: number;
+  перечисление: number;
+  total: number;
+}
+
+export interface CementReportRow {
+  zavod_name: string;
+  cement_mark_name: string;
+  packaging: PackagingType;
+  purchased_tonnage: string;
+  purchased_sum: string;
+  goods_received_tonnage: string;
+  goods_received_sum: string;
+  sold_tonnage: string;
+  sold_sum: string;
+  margin_total: string;
+}
+
+export interface VehicleReportRow {
+  label: string;
+  type: 'own' | 'hired';
+  trip_count: number;
+  revenue: string;
+  cost: string;
+  margin: string;
 }
 
 export interface ReportSummary {

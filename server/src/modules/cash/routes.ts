@@ -1,8 +1,18 @@
 import { Router } from 'express';
 import { pool } from '../../db/pool.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
-import { notFound } from '../../lib/errors.js';
+import { conflict, notFound } from '../../lib/errors.js';
 import { cashExpenseSchema, cashIncomeSchema } from './schema.js';
+
+/** Расход с category='обналичивание' создаётся модулем Обналичивания (см.
+ * cashService/service.ts) и правится/удаляется только оттуда — тот же 409-guard, что уже есть
+ * у sales.source='direct' в sales/service.ts's assertEditable. */
+async function assertNotLinkedToCashService(id: string) {
+  const { rows } = await pool.query('SELECT 1 FROM cash_service_operations WHERE related_cash_expense_id = $1', [id]);
+  if (rows[0]) {
+    throw conflict('Эта выдача связана с обналичиванием — редактируйте и удаляйте её через раздел «Обналичивание»');
+  }
+}
 
 export const cashIncomeRouter = Router();
 
@@ -136,19 +146,45 @@ cashExpenseRouter.get(
   }),
 );
 
+// Раздел 3/6 ТЗ: долг перевозчику = Σ(tonnage*hire_price_per_ton) по наёмным рейсам минус то,
+// что ему уже выплачено через кассу (category='перевозчик', то же имя). Перевозчик — не
+// справочник (см. sales.carrier_name), поэтому группируем по имени, а не по id.
+cashExpenseRouter.get(
+  '/carrier-balances',
+  asyncHandler(async (_req, res) => {
+    const { rows } = await pool.query(
+      `SELECT carrier_name AS name, SUM(owed) AS owed, SUM(paid) AS paid, SUM(owed) - SUM(paid) AS balance
+       FROM (
+         SELECT carrier_name, SUM(tonnage * hire_price_per_ton) AS owed, 0 AS paid
+         FROM sales WHERE vehicle_type = 'HIRED' AND carrier_name IS NOT NULL
+         GROUP BY carrier_name
+         UNION ALL
+         SELECT carrier_name, 0 AS owed, SUM(CASE WHEN currency = 'USD' THEN amount * usd_rate ELSE amount END) AS paid
+         FROM cash_expense WHERE category = 'перевозчик' AND carrier_name IS NOT NULL
+         GROUP BY carrier_name
+       ) t
+       GROUP BY carrier_name
+       HAVING SUM(owed) - SUM(paid) <> 0
+       ORDER BY balance DESC`,
+    );
+    res.json(rows);
+  }),
+);
+
 cashExpenseRouter.post(
   '/',
   asyncHandler(async (req, res) => {
     const data = cashExpenseSchema.parse(req.body);
     const { rows } = await pool.query(
-      `INSERT INTO cash_expense (date, category, machine_number, zavod_id, expense_type, amount, currency, usd_rate, payment_type, comment)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      `INSERT INTO cash_expense (date, category, machine_number, zavod_id, carrier_name, expense_type, amount, currency, usd_rate, payment_type, comment)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [
         data.date,
         data.category,
         data.machine_number ?? null,
         data.zavod_id ?? null,
-        data.expense_type,
+        data.carrier_name ?? null,
+        data.expense_type ?? null,
         data.amount,
         data.currency,
         data.usd_rate ?? null,
@@ -163,17 +199,19 @@ cashExpenseRouter.post(
 cashExpenseRouter.put(
   '/:id',
   asyncHandler(async (req, res) => {
+    await assertNotLinkedToCashService(req.params.id);
     const data = cashExpenseSchema.parse(req.body);
     const { rows } = await pool.query(
-      `UPDATE cash_expense SET date=$1, category=$2, machine_number=$3, zavod_id=$4, expense_type=$5, amount=$6,
-         currency=$7, usd_rate=$8, payment_type=$9, comment=$10
-       WHERE id=$11 RETURNING *`,
+      `UPDATE cash_expense SET date=$1, category=$2, machine_number=$3, zavod_id=$4, carrier_name=$5, expense_type=$6,
+         amount=$7, currency=$8, usd_rate=$9, payment_type=$10, comment=$11
+       WHERE id=$12 RETURNING *`,
       [
         data.date,
         data.category,
         data.machine_number ?? null,
         data.zavod_id ?? null,
-        data.expense_type,
+        data.carrier_name ?? null,
+        data.expense_type ?? null,
         data.amount,
         data.currency,
         data.usd_rate ?? null,
@@ -190,6 +228,7 @@ cashExpenseRouter.put(
 cashExpenseRouter.delete(
   '/:id',
   asyncHandler(async (req, res) => {
+    await assertNotLinkedToCashService(req.params.id);
     const { rowCount } = await pool.query('DELETE FROM cash_expense WHERE id = $1', [req.params.id]);
     if (!rowCount) throw notFound('Операция не найдена');
     res.status(204).end();

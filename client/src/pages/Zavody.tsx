@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { ApiError } from '@/api/client';
 import { useZavodBalances, zavodyHooks } from '@/api/modules';
 import { Badge } from '@/components/Badge';
+import { BulkImport } from '@/components/BulkImport';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable, type Column } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
@@ -13,6 +14,20 @@ import { Button } from '@/components/ui/button';
 import { formatMoney } from '@/lib/format';
 import { useToast } from '@/lib/toast';
 import type { Zavod, ZavodBalance } from '@/types';
+
+/** «Название; Регион; Телефон; Начальный долг» — регион, телефон и долг необязательны. */
+function parseZavodLine(raw: string): { label: string; payload: Record<string, unknown> } | null {
+  const parts = raw.split(';').map((p) => p.trim());
+  const name = parts[0];
+  if (!name) return null;
+  const region = parts[1] || null;
+  const phone = parts[2] || null;
+  const debtRaw = parts[3]?.replace(/\s/g, '').replace(',', '.');
+  const initial_debt = debtRaw ? Number(debtRaw) : 0;
+  if (debtRaw && Number.isNaN(initial_debt)) return null;
+  const label = `${name}${region ? ', ' + region : ''}${initial_debt ? ', долг ' + formatMoney(initial_debt) : ''}`;
+  return { label, payload: { name, region, phone, initial_debt, active: true } };
+}
 
 interface Row extends Zavod {
   purchased: string;
@@ -40,6 +55,7 @@ export function Zavody() {
 
   const [editing, setEditing] = useState<Zavod | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Zavod | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const { register, control, handleSubmit, reset, formState } = useForm<FormValues>({ defaultValues: emptyForm() });
 
   const balanceMap = new Map<number, ZavodBalance>((balances.data ?? []).map((b) => [b.id, b]));
@@ -140,7 +156,14 @@ export function Zavody() {
       <PageHeader
         title="Заводы"
         subtitle="Кредиторка считается по прямым приходам (без тикетов — те оплачены сразу с биржи)"
-        action={<Button onClick={openNew}>+ Добавить завод</Button>}
+        action={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setBulkOpen(true)}>
+              Добавить списком
+            </Button>
+            <Button onClick={openNew}>+ Добавить завод</Button>
+          </div>
+        }
       />
 
       <DataTable
@@ -186,6 +209,18 @@ export function Zavody() {
           message="Удалить? Это возможно только если завод нигде не используется. Чтобы скрыть завод из списков, но сохранить историю — снимите галочку «Активен»."
           onConfirm={onDelete}
           onCancel={() => setDeleting(null)}
+        />
+      )}
+
+      {bulkOpen && (
+        <BulkImport
+          title="Добавить заводы списком"
+          hint="По одной записи на строку: Название; Регион; Телефон; Начальный долг (регион, телефон и долг необязательны)."
+          placeholder={'Кызылкумцемент; Навои; +998901234567; 10000000\nБекабадцемент'}
+          parseLine={parseZavodLine}
+          useCreate={zavodyHooks.useCreate}
+          onClose={() => setBulkOpen(false)}
+          onDone={() => setBulkOpen(false)}
         />
       )}
     </div>

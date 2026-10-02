@@ -5,7 +5,7 @@ const vehicleTypeEnum = z.enum(['CLIENT', 'OWN', 'HIRED']);
 
 const baseIncomingSchema = z.object({
   date: z.string().min(1),
-  warehouse: z.enum(['FACT', 'DIRECT']).default('FACT'),
+  warehouse: z.enum(['FACT', 'DIRECT', 'CLIENT_GOODS']).default('FACT'),
   zavod_id: z.coerce.number().int().positive('Выберите завод'),
   cement_mark_id: z.coerce.number().int().positive('Выберите марку цемента'),
   packaging: z.enum(PACKAGING_TYPES),
@@ -26,6 +26,10 @@ const baseIncomingSchema = z.object({
 });
 
 export const incomingSchema = baseIncomingSchema.superRefine((data, ctx) => {
+  if (data.warehouse === 'CLIENT_GOODS') {
+    if (!data.client_id) ctx.addIssue({ code: 'custom', path: ['client_id'], message: 'Выберите клиента' });
+    return;
+  }
   if (data.warehouse !== 'DIRECT') return;
 
   if (!data.client_id) ctx.addIssue({ code: 'custom', path: ['client_id'], message: 'Выберите клиента' });

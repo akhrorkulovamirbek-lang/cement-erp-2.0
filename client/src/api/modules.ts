@@ -8,11 +8,17 @@ import type {
   BankAccount,
   BrokerAccount,
   BrokerOperation,
+  CarrierBalance,
+  CashBalances,
   CashExpense,
   CashIncome,
+  CashServiceOperation,
+  CashServiceSummary,
   CementMark,
+  CementReportRow,
   Client,
   ClientBalance,
+  DebtsSummary,
   ExpenseCategory,
   Incoming,
   Machine,
@@ -21,12 +27,20 @@ import type {
   ReportSummary,
   Sale,
   Ticket,
+  VehicleReportRow,
   WarehouseBalance,
   Zavod,
   ZavodBalance,
 } from '../types';
 
-const REPORT_KEYS = ['report-summary', 'report-client-balance', 'report-zavod-balance'];
+const REPORT_KEYS = [
+  'report-summary',
+  'report-client-balance',
+  'report-zavod-balance',
+  'report-debts-summary',
+  'report-cash-balances',
+  'carrier-balances',
+];
 
 // TInput разрешает числа/булевы, где ответ API (T) хранит их как строки NUMERIC из Postgres —
 // не переиспользуем сам T как тип формы записи.
@@ -55,6 +69,34 @@ export const salesHooks = createCrudHooks<Sale, Record<string, unknown>>('sales'
 export const cashIncomeHooks = createCrudHooks<CashIncome>('cash-income', '/cash-income', REPORT_KEYS);
 export const cashExpenseHooks = createCrudHooks<CashExpense>('cash-expense', '/cash-expense', REPORT_KEYS);
 export const ticketsHooks = createCrudHooks<Ticket, Record<string, unknown>>('tickets', '/tickets', ['broker-account', ...REPORT_KEYS]);
+// Операция создаёт/правит связанную строку cash_expense и меняет баланс банковского счёта —
+// инвалидируем обе 'cash-expense' (единый список Кассы её подтянет) и 'bank-accounts'.
+export const cashServiceHooks = createCrudHooks<CashServiceOperation, Record<string, unknown>>(
+  'cash-service',
+  '/cash-service',
+  ['bank-accounts', 'cash-expense', 'cash-service-summary', ...REPORT_KEYS],
+);
+
+export function useCashServiceSummary(params: { from?: string; to?: string } = {}) {
+  return useQuery({
+    queryKey: ['cash-service-summary', params],
+    queryFn: () => api.get<CashServiceSummary>(`/cash-service/summary${buildQuery(params)}`),
+  });
+}
+
+export function useCementReport(params: { from?: string; to?: string } = {}) {
+  return useQuery({
+    queryKey: ['report-cement', params],
+    queryFn: () => api.get<CementReportRow[]>(`/report/cement${buildQuery(params)}`),
+  });
+}
+
+export function useVehiclesReport(params: { from?: string; to?: string } = {}) {
+  return useQuery({
+    queryKey: ['report-vehicles', params],
+    queryFn: () => api.get<VehicleReportRow[]>(`/report/vehicles${buildQuery(params)}`),
+  });
+}
 
 export function useWarehouseBalance() {
   return useQuery({
@@ -109,6 +151,27 @@ export function useZavodBalances() {
   return useQuery({
     queryKey: ['report-zavod-balance'],
     queryFn: () => api.get<ZavodBalance[]>('/report/zavod-balance'),
+  });
+}
+
+export function useCarrierBalances() {
+  return useQuery({
+    queryKey: ['carrier-balances'],
+    queryFn: () => api.get<CarrierBalance[]>('/cash-expense/carrier-balances'),
+  });
+}
+
+export function useDebtsSummary() {
+  return useQuery({
+    queryKey: ['report-debts-summary'],
+    queryFn: () => api.get<DebtsSummary>('/report/debts-summary'),
+  });
+}
+
+export function useCashBalances() {
+  return useQuery({
+    queryKey: ['report-cash-balances'],
+    queryFn: () => api.get<CashBalances>('/report/cash-balances'),
   });
 }
 
@@ -177,8 +240,11 @@ export function useAppSettings() {
 export function useUpdateAppSettings() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { session_timeout_minutes?: number; broker_allow_negative?: boolean }) =>
-      api.put<AppSettingsMap>('/settings/app', data),
+    mutationFn: (data: {
+      session_timeout_minutes?: number;
+      broker_allow_negative?: boolean;
+      cash_service_default_commission_percent?: number;
+    }) => api.put<AppSettingsMap>('/settings/app', data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['app-settings'] }),
   });
 }

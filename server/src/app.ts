@@ -8,6 +8,7 @@ import { auditLogRouter } from './modules/auditLog/routes.js';
 import { bankAccountsRouter } from './modules/bankAccounts/routes.js';
 import { brokerRouter } from './modules/broker/routes.js';
 import { cashExpenseRouter, cashIncomeRouter } from './modules/cash/routes.js';
+import { cashServiceRouter } from './modules/cashService/routes.js';
 import { cementMarksRouter } from './modules/cementMarks/routes.js';
 import { clientsRouter } from './modules/clients/routes.js';
 import { logisticsExpenseCategoriesRouter } from './modules/expenseCategories/routes.js';
@@ -48,7 +49,6 @@ export function createApp() {
     cementMarksRouter,
   );
   app.use('/api/machines', refPermission, auditResource('machine', { table: 'machines', label: 'Машина', nameColumn: 'number' }), machinesRouter);
-  // Банковские счета: таблица/роут остаются для будущего «Обналичивания», экран пока скрыт в UI.
   app.use(
     '/api/bank-accounts',
     refPermission,
@@ -75,6 +75,12 @@ export function createApp() {
   app.use('/api/sales', requirePermission('sales'), auditResource('sale', { table: 'sales', label: 'Продажа' }), salesRouter);
   app.use('/api/cash-income', requirePermission('cash'), auditResource('cash_income', { table: 'cash_income', label: 'Приход кассы' }), cashIncomeRouter);
   app.use('/api/cash-expense', requirePermission('cash'), auditResource('cash_expense', { table: 'cash_expense', label: 'Расход кассы' }), cashExpenseRouter);
+  app.use(
+    '/api/cash-service',
+    requirePermission('cashService'),
+    auditResource('cash_service_operation', { table: 'cash_service_operations', label: 'Обналичивание' }),
+    cashServiceRouter,
+  );
   app.use('/api/report', requirePermission('reports'), reportsRouter);
 
   // Ядро

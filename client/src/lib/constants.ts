@@ -8,12 +8,13 @@ export const PACKAGING_LABELS: Record<PackagingType, string> = {
 };
 export const PACKAGING_OPTIONS = PACKAGING_TYPES.map((value) => ({ value, label: PACKAGING_LABELS[value] }));
 
-export const WAREHOUSE_TYPES = ['FACT', 'DIRECT', 'TICKET'] as const;
+export const WAREHOUSE_TYPES = ['FACT', 'DIRECT', 'TICKET', 'CLIENT_GOODS'] as const;
 export type WarehouseType = (typeof WAREHOUSE_TYPES)[number];
 export const WAREHOUSE_LABELS: Record<WarehouseType, string> = {
   FACT: 'Факт',
   DIRECT: 'Напрямую',
   TICKET: 'Тикет',
+  CLIENT_GOODS: 'Оплата товаром',
 };
 export const WAREHOUSE_OPTIONS = WAREHOUSE_TYPES.map((value) => ({ value, label: WAREHOUSE_LABELS[value] }));
 

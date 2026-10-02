@@ -81,8 +81,8 @@ async function updateLinkedSale(client: pg.PoolClient, saleId: number, incomingI
 export async function createIncoming(client: pg.PoolClient, data: IncomingInput) {
   const totalSum = data.tonnage * data.price_per_ton;
   const { rows } = await client.query(
-    `INSERT INTO incoming (date, warehouse, zavod_id, cement_mark_id, packaging, tonnage, price_per_ton, total_sum, machine_number, comment)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    `INSERT INTO incoming (date, warehouse, zavod_id, cement_mark_id, packaging, tonnage, price_per_ton, total_sum, machine_number, comment, client_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
     [
       data.date,
       data.warehouse,
@@ -94,6 +94,7 @@ export async function createIncoming(client: pg.PoolClient, data: IncomingInput)
       totalSum,
       data.machine_number ?? null,
       data.comment ?? null,
+      data.warehouse === 'CLIENT_GOODS' ? data.client_id : null,
     ],
   );
   const incoming = rows[0];
@@ -103,6 +104,7 @@ export async function createIncoming(client: pg.PoolClient, data: IncomingInput)
     await client.query('UPDATE incoming SET linked_sale_id = $1 WHERE id = $2', [saleId, incoming.id]);
     incoming.linked_sale_id = saleId;
   } else {
+    // FACT и CLIENT_GOODS одинаково пополняют остаток склада (раздел 9.2 ТЗ).
     await recomputeWarehouseBalance(client, data.zavod_id, data.cement_mark_id, data.packaging);
   }
   return incoming;
@@ -116,8 +118,8 @@ export async function updateIncoming(client: pg.PoolClient, id: number, data: In
   const totalSum = data.tonnage * data.price_per_ton;
   const { rows } = await client.query(
     `UPDATE incoming SET date=$1, warehouse=$2, zavod_id=$3, cement_mark_id=$4, packaging=$5,
-       tonnage=$6, price_per_ton=$7, total_sum=$8, machine_number=$9, comment=$10
-     WHERE id=$11 RETURNING *`,
+       tonnage=$6, price_per_ton=$7, total_sum=$8, machine_number=$9, comment=$10, client_id=$11
+     WHERE id=$12 RETURNING *`,
     [
       data.date,
       data.warehouse,
@@ -129,6 +131,7 @@ export async function updateIncoming(client: pg.PoolClient, id: number, data: In
       totalSum,
       data.machine_number ?? null,
       data.comment ?? null,
+      data.warehouse === 'CLIENT_GOODS' ? data.client_id : null,
       id,
     ],
   );
@@ -170,7 +173,7 @@ export async function deleteIncoming(client: pg.PoolClient, id: number) {
     await client.query('DELETE FROM sales WHERE id = $1', [deleted.linked_sale_id]);
   }
   await client.query('DELETE FROM incoming WHERE id = $1', [id]);
-  if (deleted.warehouse === 'FACT') {
+  if (deleted.warehouse === 'FACT' || deleted.warehouse === 'CLIENT_GOODS') {
     await recomputeWarehouseBalance(client, deleted.zavod_id, deleted.cement_mark_id, deleted.packaging);
   }
 }

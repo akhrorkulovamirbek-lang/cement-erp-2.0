@@ -1,16 +1,22 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { ApiError } from '@/api/client';
-import { clientsHooks } from '@/api/modules';
+import { api, ApiError } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/lib/toast';
 import type { Client } from '@/types';
 import { FormRow, Input } from './form';
 
-/** Раздел 1 ТЗ: «клиента можно добавить прямо из формы продажи, не уходя со страницы». */
+/** Раздел 1 ТЗ: «клиента можно добавить прямо из формы продажи, не уходя со страницы».
+ *
+ * Создаёт клиента напрямую через api.post, а не через clientsHooks.useCreate() — тот
+ * дополнительно вызывает invalidateQueries, чей фоновый рефетч GET /clients иногда успевает
+ * откатить только что выставленный Select-триггером client_id обратно в пустое значение
+ * (гонка между "вставили id в форму" и "список клиентов ещё не успел это подтвердить»).
+ * Кэш списков обновляем сами, сразу и синхронно — этого достаточно. */
 export function QuickAddClient({ onCreated }: { onCreated: (client: Client) => void }) {
   const { notify } = useToast();
-  const create = clientsHooks.useCreate();
+  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const { register, handleSubmit, reset, formState } = useForm<{ name: string; phone: string }>({
     defaultValues: { name: '', phone: '' },
@@ -26,7 +32,10 @@ export function QuickAddClient({ onCreated }: { onCreated: (client: Client) => v
 
   async function onSubmit(data: { name: string; phone: string }) {
     try {
-      const client = (await create.mutateAsync({ name: data.name, phone: data.phone || null })) as Client;
+      const client = await api.post<Client>('/clients', { name: data.name, phone: data.phone || null });
+      qc.setQueriesData({ queryKey: ['clients'] }, (old: unknown) =>
+        Array.isArray(old) ? [client, ...(old as Client[])] : old,
+      );
       notify('Клиент добавлен');
       onCreated(client);
       reset({ name: '', phone: '' });

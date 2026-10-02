@@ -28,7 +28,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { PACKAGING_OPTIONS, VEHICLE_TYPE_OPTIONS, WAREHOUSE_OPTIONS, PACKAGING_LABELS } from '@/lib/constants';
 import { formatDate, formatMoney, formatNumber, todayISO } from '@/lib/format';
 import { useToast } from '@/lib/toast';
-import type { Incoming, IncomingWarehouse, Ticket } from '@/types';
+import type { Client, Incoming, IncomingWarehouse, Ticket } from '@/types';
 
 interface FormValues {
   date: string;
@@ -111,8 +111,26 @@ export function IncomingPage() {
   const [editing, setEditing] = useState<Incoming | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Incoming | null>(null);
   const [warehouse, setWarehouse] = useState<IncomingWarehouse | 'TICKET'>('FACT');
-  const { register, control, handleSubmit, reset, watch, formState } = useForm<FormValues>({ defaultValues: emptyForm() });
+  const { register, control, handleSubmit, reset, watch, setValue, formState } = useForm<FormValues>({ defaultValues: emptyForm() });
   const vehicleType = watch('vehicle_type');
+  // Клиент, только что созданный через «+ Добавить нового клиента» — держим отдельно и мержим
+  // в options, чтобы он сразу появился в выпадающем списке, даже пока react-query ещё не
+  // подтвердил обновлённый список с сервера.
+  const [justAddedClient, setJustAddedClient] = useState<Client | null>(null);
+  const clientOptions = (
+    justAddedClient && !(clients.data ?? []).some((c) => c.id === justAddedClient.id)
+      ? [justAddedClient, ...(clients.data ?? [])]
+      : (clients.data ?? [])
+  ).map((c) => ({ value: String(c.id), label: c.name }));
+
+  function selectClient(client: Client) {
+    setJustAddedClient(client);
+    setValue('client_id', String(client.id), { shouldValidate: true });
+    // У Radix Select при программной установке value есть разовая внутренняя пересинхронизация
+    // вскоре после первого рендера с новым значением, которая иногда откатывает его обратно —
+    // подтверждаем значение ещё раз чуть позже, чтобы оно гарантированно закрепилось.
+    setTimeout(() => setValue('client_id', String(client.id), { shouldValidate: true }), 250);
+  }
 
   const ticketForm = useForm<TicketFormValues>({ defaultValues: emptyTicketForm() });
 
@@ -132,7 +150,7 @@ export function IncomingPage() {
       price_per_ton: row.price_per_ton,
       machine_number: row.machine_number ?? '',
       comment: row.comment ?? '',
-      client_id: '',
+      client_id: row.warehouse === 'CLIENT_GOODS' && row.client_id ? String(row.client_id) : '',
       sale_price_per_ton: '',
       vehicle_type: '',
       own_vehicle_id: '',
@@ -156,7 +174,7 @@ export function IncomingPage() {
       price_per_ton: Number(data.price_per_ton),
       machine_number: data.machine_number || null,
       comment: data.comment || null,
-      client_id: warehouse === 'DIRECT' ? Number(data.client_id) : null,
+      client_id: warehouse === 'DIRECT' || warehouse === 'CLIENT_GOODS' ? Number(data.client_id) : null,
       sale_price_per_ton: warehouse === 'DIRECT' ? Number(data.sale_price_per_ton) : null,
       vehicle_type: warehouse === 'DIRECT' ? data.vehicle_type || null : null,
       own_vehicle_id: warehouse === 'DIRECT' && data.vehicle_type === 'OWN' ? Number(data.own_vehicle_id) : null,
@@ -203,10 +221,19 @@ export function IncomingPage() {
     {
       key: 'warehouse',
       header: 'Склад',
-      render: (r) => (r.warehouse === 'DIRECT' ? <Badge tone="amber">Напрямую</Badge> : <Badge tone="slate">Факт</Badge>),
+      render: (r) => {
+        if (r.warehouse === 'DIRECT') return <Badge tone="amber">Напрямую</Badge>;
+        if (r.warehouse === 'CLIENT_GOODS') return <Badge tone="blue">От клиента</Badge>;
+        return <Badge tone="slate">Факт</Badge>;
+      },
     },
     { key: 'zavod_name', header: 'Завод' },
     { key: 'cement_mark_name', header: 'Марка' },
+    {
+      key: 'client_name',
+      header: 'Контрагент',
+      render: (r) => r.client_name || '—',
+    },
     { key: 'packaging', header: 'Упаковка', render: (r) => PACKAGING_LABELS[r.packaging] },
     {
       key: 'tonnage',
@@ -558,7 +585,10 @@ export function IncomingPage() {
                 <FormRow label="Тоннаж" error={formState.errors.tonnage?.message}>
                   <Input type="number" step="0.001" {...register('tonnage', { required: 'Укажите тоннаж' })} />
                 </FormRow>
-                <FormRow label="Цена закупки за тонну" error={formState.errors.price_per_ton?.message}>
+                <FormRow
+                  label={warehouse === 'CLIENT_GOODS' ? 'Цена за тонну (на эту сумму уменьшится долг клиента)' : 'Цена закупки за тонну'}
+                  error={formState.errors.price_per_ton?.message}
+                >
                   <Input type="number" step="0.01" {...register('price_per_ton', { required: 'Укажите цену' })} />
                 </FormRow>
               </div>
@@ -566,12 +596,27 @@ export function IncomingPage() {
                 <Input {...register('machine_number')} />
               </FormRow>
 
+              {warehouse === 'CLIENT_GOODS' && (
+                <div className="space-y-2 rounded-md bg-muted p-3">
+                  <FormRow label="Клиент" error={formState.errors.client_id?.message}>
+                    <RHFSelect control={control} name="client_id" options={clientOptions} />
+                  </FormRow>
+                  <QuickAddClient onCreated={selectClient} />
+                </div>
+              )}
+
               {warehouse === 'DIRECT' && (
                 <div className="space-y-4 rounded-md bg-muted p-3">
                   <FormRow label="Клиент" error={formState.errors.client_id?.message}>
-                    <RHFSelect control={control} name="client_id" options={(clients.data ?? []).map((c) => ({ value: String(c.id), label: c.name }))} />
+                    <RHFSelect
+                      control={control}
+                      name="client_id"
+                      options={clientOptions}
+                    />
                     <div className="mt-1">
-                      <QuickAddClient onCreated={(c) => reset({ ...watch(), client_id: String(c.id) })} />
+                      <QuickAddClient
+                        onCreated={selectClient}
+                      />
                     </div>
                   </FormRow>
                   <FormRow label="Цена продажи за тонну" error={formState.errors.sale_price_per_ton?.message}>
@@ -644,7 +689,9 @@ export function IncomingPage() {
           message={
             deleting.warehouse === 'DIRECT'
               ? 'Это удалит и связанную продажу «Напрямую». Остатки склада не изменятся.'
-              : 'Остатки склада и связанные продажи будут пересчитаны.'
+              : deleting.warehouse === 'CLIENT_GOODS'
+                ? 'Остатки склада пересчитаются, долг клиента увеличится обратно на эту сумму.'
+                : 'Остатки склада и связанные продажи будут пересчитаны.'
           }
           onConfirm={onDelete}
           onCancel={() => setDeleting(null)}

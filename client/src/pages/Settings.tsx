@@ -124,10 +124,17 @@ function GeneralTab() {
   const settings = useAppSettings();
   const update = useUpdateAppSettings();
   const [sessionMinutes, setSessionMinutes] = useState('720');
+  const [commissionPercent, setCommissionPercent] = useState('');
 
   useEffect(() => {
     if (settings.data?.session_timeout_minutes) setSessionMinutes(settings.data.session_timeout_minutes);
   }, [settings.data?.session_timeout_minutes]);
+
+  useEffect(() => {
+    if (settings.data?.cash_service_default_commission_percent) {
+      setCommissionPercent(settings.data.cash_service_default_commission_percent);
+    }
+  }, [settings.data?.cash_service_default_commission_percent]);
 
   const brokerAllowNegative = settings.data?.broker_allow_negative === 'true';
 
@@ -143,6 +150,15 @@ function GeneralTab() {
   async function onToggleBrokerNegative(v: boolean) {
     try {
       await update.mutateAsync({ broker_allow_negative: v });
+      notify('Сохранено');
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : 'Ошибка', 'error');
+    }
+  }
+
+  async function saveCommissionPercent() {
+    try {
+      await update.mutateAsync({ cash_service_default_commission_percent: Number(commissionPercent || 0) });
       notify('Сохранено');
     } catch (err) {
       notify(err instanceof ApiError ? err.message : 'Ошибка', 'error');
@@ -181,6 +197,30 @@ function GeneralTab() {
             </p>
           </div>
           <Switch checked={brokerAllowNegative} onCheckedChange={onToggleBrokerNegative} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-4">
+          <div className="font-medium">Комиссия обналичивания по умолчанию</div>
+          <p className="mt-0.5 mb-3 text-sm text-muted-foreground">
+            Подставляется в новую операцию в разделе «Обналичивание», можно изменить на каждой операции отдельно.
+          </p>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              step="0.1"
+              value={commissionPercent}
+              onChange={(e) => setCommissionPercent(e.target.value)}
+              className="w-32"
+              placeholder="например 2"
+            />
+            <span className="text-sm text-muted-foreground">%</span>
+            <Button variant="outline" onClick={saveCommissionPercent}>
+              Сохранить
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

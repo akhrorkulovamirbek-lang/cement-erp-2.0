@@ -9,7 +9,7 @@ export const incomingRouter = Router();
 incomingRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const { zavod_id, cement_mark_id, from, to, q } = req.query;
+    const { zavod_id, cement_mark_id, client_id, from, to, q } = req.query;
     const conditions: string[] = [];
     const params: unknown[] = [];
     if (zavod_id) {
@@ -19,6 +19,10 @@ incomingRouter.get(
     if (cement_mark_id) {
       params.push(Number(cement_mark_id));
       conditions.push(`i.cement_mark_id = $${params.length}`);
+    }
+    if (client_id) {
+      params.push(Number(client_id));
+      conditions.push(`i.client_id = $${params.length}`);
     }
     if (from) {
       params.push(from);
@@ -34,10 +38,11 @@ incomingRouter.get(
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
-      `SELECT i.*, z.name AS zavod_name, cm.name AS cement_mark_name
+      `SELECT i.*, z.name AS zavod_name, cm.name AS cement_mark_name, c.name AS client_name
        FROM incoming i
        JOIN zavody z ON z.id = i.zavod_id
        JOIN cement_marks cm ON cm.id = i.cement_mark_id
+       LEFT JOIN clients c ON c.id = i.client_id
        ${where}
        ORDER BY i.date DESC, i.id DESC`,
       params,

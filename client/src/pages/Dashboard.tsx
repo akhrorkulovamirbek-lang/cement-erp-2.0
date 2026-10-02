@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { useReportSummary } from '@/api/modules';
+import { useCashBalances, useDebtsSummary, useReportSummary } from '@/api/modules';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { PACKAGING_LABELS } from '@/lib/constants';
 import { formatDate, formatMoney, formatNumber } from '@/lib/format';
@@ -14,6 +15,8 @@ export function Dashboard() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const summary = useReportSummary({ from: from || undefined, to: to || undefined });
+  const debts = useDebtsSummary();
+  const cashBalances = useCashBalances();
   const data = summary.data;
 
   const chartData = (data?.dailyTrend ?? []).map((d) => ({ date: formatDate(d.date), total: Number(d.total) }));
@@ -32,6 +35,41 @@ export function Dashboard() {
           </div>
         }
       />
+
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <StatCard label="Наличные" value={formatMoney(cashBalances.data?.наличка ?? 0)} />
+        <StatCard label="Карта" value={formatMoney(cashBalances.data?.карта ?? 0)} />
+        <StatCard label="Перевод" value={formatMoney(cashBalances.data?.перечисление ?? 0)} />
+      </div>
+
+      <h2 className="mb-2 text-sm font-semibold">Взаиморасчёты</h2>
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <DebtCard
+          title="Должны нам клиенты"
+          total={debts.data?.clientDebtTotal ?? 0}
+          items={(debts.data?.topClients ?? []).map((c) => ({
+            key: c.id,
+            label: c.name,
+            value: c.balance,
+            href: `/clients/${c.id}`,
+          }))}
+        />
+        <DebtCard
+          title="Должны мы заводам"
+          total={debts.data?.zavodDebtTotal ?? 0}
+          items={(debts.data?.topZavody ?? []).map((z) => ({
+            key: z.id,
+            label: z.name,
+            value: z.balance,
+            href: `/zavody/${z.id}`,
+          }))}
+        />
+        <DebtCard
+          title="Должны мы перевозчикам"
+          total={debts.data?.carrierDebtTotal ?? 0}
+          items={(debts.data?.topCarriers ?? []).map((c) => ({ key: c.name, label: c.name, value: c.balance }))}
+        />
+      </div>
 
       <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Оборот" value={formatMoney(data?.revenue ?? 0)} hint={`${data?.salesCount ?? 0} продаж`} />
@@ -125,5 +163,44 @@ export function Dashboard() {
         </Card>
       )}
     </div>
+  );
+}
+
+function DebtCard({
+  title,
+  total,
+  items,
+}: {
+  title: string;
+  total: number;
+  items: { key: string | number; label: string; value: string; href?: string }[];
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardDescription>{title}</CardDescription>
+        <CardTitle className={`text-2xl tabular-nums ${total > 0 ? 'text-destructive' : 'text-emerald-600'}`}>
+          {formatMoney(total)}
+        </CardTitle>
+      </CardHeader>
+      {items.length > 0 && (
+        <CardContent className="pt-0">
+          <ul className="space-y-1.5">
+            {items.map((it) => (
+              <li key={it.key} className="flex justify-between gap-2 text-sm">
+                {it.href ? (
+                  <Link to={it.href} className="truncate text-muted-foreground hover:text-foreground hover:underline">
+                    {it.label}
+                  </Link>
+                ) : (
+                  <span className="truncate text-muted-foreground">{it.label}</span>
+                )}
+                <span className="shrink-0 font-medium tabular-nums">{formatMoney(it.value)}</span>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      )}
+    </Card>
   );
 }

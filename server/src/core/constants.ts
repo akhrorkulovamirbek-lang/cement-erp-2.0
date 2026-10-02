@@ -20,6 +20,7 @@ export const RESOURCE_CODES = [
   'sales',
   'cash',
   'broker',
+  'cashService',
   'reports',
   'users',
   'settings',
@@ -33,6 +34,7 @@ export const RESOURCE_LABELS: Record<ResourceCode, string> = {
   sales: 'Продажа',
   cash: 'Касса',
   broker: 'Брокерский счёт',
+  cashService: 'Обналичивание',
   reports: 'Отчёты',
   users: 'Пользователи',
   settings: 'Настройки',
@@ -44,7 +46,7 @@ export const DEFAULT_PERMISSIONS: Record<Role, ResourceCode[]> = {
   admin: [...RESOURCE_CODES],
   manager: RESOURCE_CODES.filter((r) => r !== 'users' && r !== 'settings') as ResourceCode[],
   operator: ['references', 'incoming', 'sales'],
-  cashier: ['references', 'cash', 'broker', 'reports'],
+  cashier: ['references', 'cash', 'broker', 'cashService', 'reports'],
 };
 
 export const PACKAGING_TYPES = ['MESHOK', 'NAVAL'] as const;

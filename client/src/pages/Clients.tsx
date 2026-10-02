@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { ApiError } from '@/api/client';
 import { clientsHooks, useClientBalances } from '@/api/modules';
 import { Badge } from '@/components/Badge';
+import { BulkImport } from '@/components/BulkImport';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable, type Column } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
@@ -14,6 +15,22 @@ import { Textarea } from '@/components/ui/textarea';
 import { formatMoney } from '@/lib/format';
 import { useToast } from '@/lib/toast';
 import type { Client, ClientBalance } from '@/types';
+
+/** «Имя; Телефон; Начальный долг» — телефон и долг необязательны. */
+function parseClientLine(raw: string): { label: string; payload: Record<string, unknown> } | null {
+  const parts = raw.split(';').map((p) => p.trim());
+  const name = parts[0];
+  if (!name) return null;
+  const phone = parts[1] || null;
+  const debtRaw = parts[2]?.replace(/\s/g, '').replace(',', '.');
+  const initial_debt = debtRaw ? Number(debtRaw) : 0;
+  if (debtRaw && Number.isNaN(initial_debt)) return null;
+  const label = `${name}${phone ? ', ' + phone : ''}${initial_debt ? ', долг ' + formatMoney(initial_debt) : ''}`;
+  return {
+    label,
+    payload: { name, phone, contact_person: null, inn: null, initial_debt, comment: null, active: true },
+  };
+}
 
 interface Row extends Client {
   purchased: string;
@@ -43,6 +60,7 @@ export function Clients() {
 
   const [editing, setEditing] = useState<Client | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Client | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const { register, control, handleSubmit, reset, formState } = useForm<FormValues>({ defaultValues: emptyForm() });
 
   const balanceMap = new Map<number, ClientBalance>((balances.data ?? []).map((b) => [b.id, b]));
@@ -153,7 +171,14 @@ export function Clients() {
       <PageHeader
         title="Клиенты"
         subtitle="Долги считаются автоматически: куплено минус оплачено"
-        action={<Button onClick={openNew}>+ Добавить клиента</Button>}
+        action={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setBulkOpen(true)}>
+              Добавить списком
+            </Button>
+            <Button onClick={openNew}>+ Добавить клиента</Button>
+          </div>
+        }
       />
 
       <DataTable
@@ -205,6 +230,18 @@ export function Clients() {
           message={`Удалить «${deleting.name}»? Это возможно только если у клиента нет продаж и платежей. Чтобы скрыть клиента из списков, но сохранить историю — снимите галочку «Активен».`}
           onConfirm={onDelete}
           onCancel={() => setDeleting(null)}
+        />
+      )}
+
+      {bulkOpen && (
+        <BulkImport
+          title="Добавить клиентов списком"
+          hint="По одной записи на строку: Имя; Телефон; Начальный долг (телефон и долг необязательны)."
+          placeholder={'ООО Ромашка; +998901234567; 5000000\nИванов Иван'}
+          parseLine={parseClientLine}
+          useCreate={clientsHooks.useCreate}
+          onClose={() => setBulkOpen(false)}
+          onDone={() => setBulkOpen(false)}
         />
       )}
     </div>

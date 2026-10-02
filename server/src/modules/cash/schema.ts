@@ -25,10 +25,11 @@ export const cashIncomeSchema = z
 export const cashExpenseSchema = z
   .object({
     date: z.string().min(1),
-    category: z.enum(['цемент', 'логистика', 'прочее']),
+    category: z.enum(['цемент', 'логистика', 'перевозчик', 'прочее']),
     machine_number: z.string().trim().optional().nullable(),
     zavod_id: z.coerce.number().int().positive().optional().nullable(),
-    expense_type: z.string().trim().min(1, 'Укажите тип расхода'),
+    carrier_name: z.string().trim().optional().nullable(),
+    expense_type: z.string().trim().optional().nullable(),
     amount: z.coerce.number().positive('Сумма должна быть больше нуля'),
     payment_type: z.enum(['перечисление', 'наличка', 'карта']),
     comment: z.string().trim().optional().nullable(),
@@ -37,5 +38,14 @@ export const cashExpenseSchema = z
   .superRefine((data, ctx) => {
     if (data.currency === 'USD' && !data.usd_rate) {
       ctx.addIssue({ code: 'custom', path: ['usd_rate'], message: 'Укажите курс доллара' });
+    }
+    if (data.category === 'перевозчик' && !data.carrier_name) {
+      ctx.addIssue({ code: 'custom', path: ['carrier_name'], message: 'Укажите перевозчика' });
+    }
+    if (data.category === 'прочее' && !data.comment) {
+      ctx.addIssue({ code: 'custom', path: ['comment'], message: 'Комментарий обязателен для прочих расходов' });
+    }
+    if (data.category !== 'перевозчик' && !data.expense_type) {
+      ctx.addIssue({ code: 'custom', path: ['expense_type'], message: 'Укажите тип расхода' });
     }
   });
