@@ -13,6 +13,7 @@ import {
 } from '@/api/modules';
 import { Badge } from '@/components/Badge';
 import { DataTable, type Column } from '@/components/DataTable';
+import { MoneyCell } from '@/components/MoneyCell';
 import { MoneyFields } from '@/components/MoneyFields';
 import { PageHeader } from '@/components/PageHeader';
 import { SidePanel } from '@/components/SidePanel';
@@ -32,6 +33,8 @@ interface PayDebtForm {
   usd_rate: string;
   payment_type: 'перечисление' | 'наличка' | 'карта';
   comment: string;
+  payer_name: string;
+  extra_amount: string;
 }
 
 const emptyPayDebtForm = (): PayDebtForm => ({
@@ -41,6 +44,8 @@ const emptyPayDebtForm = (): PayDebtForm => ({
   usd_rate: '',
   payment_type: 'перечисление',
   comment: '',
+  payer_name: '',
+  extra_amount: '',
 });
 
 interface PayGoodsForm {
@@ -83,15 +88,19 @@ export function ClientDetail() {
   const goodsPayments = (goodsPaymentsList.data ?? []).filter((r) => r.warehouse === 'CLIENT_GOODS');
 
   const [payOpen, setPayOpen] = useState(false);
-  const { register, control, handleSubmit, reset, watch, formState } = useForm<PayDebtForm>({
+  const [showSplit, setShowSplit] = useState(false);
+  const { register, control, handleSubmit, reset, watch, setValue, formState } = useForm<PayDebtForm>({
     defaultValues: emptyPayDebtForm(),
   });
+  const currencyWatch = watch('currency');
+  const splitCurrency = currencyWatch === 'USD' ? 'UZS' : 'USD';
 
   const [payGoodsOpen, setPayGoodsOpen] = useState(false);
   const goodsForm = useForm<PayGoodsForm>({ defaultValues: emptyPayGoodsForm() });
 
   function openPayDebt() {
     reset(emptyPayDebtForm());
+    setShowSplit(false);
     setPayOpen(true);
   }
 
@@ -128,9 +137,11 @@ export function ClientDetail() {
         client_id: clientId,
         amount: Number(data.amount),
         currency: data.currency,
-        usd_rate: data.currency === 'USD' ? Number(data.usd_rate) : null,
+        usd_rate: data.currency === 'USD' || showSplit ? Number(data.usd_rate) : null,
         payment_type: data.payment_type,
         comment: data.comment || null,
+        payer_name: data.payer_name || null,
+        extra_amount: showSplit && data.extra_amount ? Number(data.extra_amount) : null,
       } as never);
       notify('Долг погашен');
       setPayOpen(false);
@@ -147,6 +158,20 @@ export function ClientDetail() {
       render: (r) => (r.sale_type === 'CEMENT' ? <Badge tone="slate">Цемент</Badge> : <Badge tone="blue">Логистика</Badge>),
     },
     { key: 'cement_mark_name', header: 'Марка', render: (r) => r.cement_mark_name ?? '—' },
+    { key: 'zavod_name', header: 'Завод', render: (r) => r.zavod_name ?? '—' },
+    {
+      key: 'vehicle',
+      header: 'Машина',
+      render: (r) => {
+        // own_vehicle_number — через own_vehicle_id из machines; у исторических импортированных
+        // продаж own_vehicle_id не резолвится (см. import/service.ts), номер лежит в
+        // machine_number текстом — тот же приём, что уже для HIRED/CLIENT ниже.
+        if (r.vehicle_type === 'OWN') return r.own_vehicle_number ?? r.machine_number ?? '—';
+        if (r.vehicle_type === 'HIRED') return r.carrier_name ? `${r.carrier_name} (${r.machine_number ?? '—'})` : (r.machine_number ?? '—');
+        if (r.vehicle_type === 'CLIENT') return r.machine_number ?? '—';
+        return '—';
+      },
+    },
     {
       key: 'tonnage',
       header: 'Тоннаж',
@@ -183,12 +208,13 @@ export function ClientDetail() {
   const paymentColumns: Column<CashIncome>[] = [
     { key: 'date', header: 'Дата', sortValue: (r) => r.date, render: (r) => formatDate(r.date) },
     { key: 'category', header: 'Категория' },
+    { key: 'payer_name', header: 'Плательщик', render: (r) => r.payer_name || '—' },
     {
       key: 'amount',
       header: 'Сумма',
       align: 'right',
       sortValue: (r) => Number(r.amount),
-      render: (r) => formatMoney(r.amount, r.currency),
+      render: (r) => <MoneyCell amount={r.amount} currency={r.currency} usdRate={r.usd_rate} extraAmount={r.extra_amount} />,
     },
     { key: 'payment_type', header: 'Способ' },
     { key: 'comment', header: 'Комментарий', render: (r) => r.comment || '—' },
@@ -279,7 +305,35 @@ export function ClientDetail() {
             <FormRow label="Дата">
               <Input type="date" {...register('date', { required: true })} />
             </FormRow>
-            <MoneyFields control={control} register={register} watch={watch} errors={formState.errors} />
+            <FormRow label="Плательщик (необязательно, если платит не сам клиент)">
+              <Input {...register('payer_name')} placeholder="Например, другая фирма" />
+            </FormRow>
+            <MoneyFields control={control} register={register} watch={watch} errors={formState.errors} forceShowRate={showSplit} />
+            {!showSplit ? (
+              <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setShowSplit(true)}>
+                + Клиент доплатил в {splitCurrency === 'USD' ? 'долларах' : 'сумах'}
+              </Button>
+            ) : (
+              <FormRow
+                label={`Сумма в ${splitCurrency === 'USD' ? '$' : 'сумах'} (вторая часть платежа)`}
+                error={formState.errors.extra_amount?.message}
+              >
+                <div className="flex items-center gap-2">
+                  <Input type="number" step="0.01" {...register('extra_amount')} />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setShowSplit(false);
+                      setValue('extra_amount', '');
+                    }}
+                  >
+                    Убрать
+                  </Button>
+                </div>
+              </FormRow>
+            )}
             <FormRow label="Комментарий (необязательно)">
               <Input {...register('comment')} />
             </FormRow>

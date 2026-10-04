@@ -12,6 +12,7 @@ import { cashServiceRouter } from './modules/cashService/routes.js';
 import { cementMarksRouter } from './modules/cementMarks/routes.js';
 import { clientsRouter } from './modules/clients/routes.js';
 import { logisticsExpenseCategoriesRouter } from './modules/expenseCategories/routes.js';
+import { importRouter } from './modules/import/routes.js';
 import { incomingRouter } from './modules/incoming/routes.js';
 import { machinesRouter } from './modules/machines/routes.js';
 import { reportsRouter } from './modules/reports/routes.js';
@@ -88,6 +89,8 @@ export function createApp() {
   app.use('/api/users', requirePermission('users'), usersRouter);
   app.use('/api/settings', requirePermission('settings'), settingsRouter);
   app.use('/api/audit-log', requirePermission('auditLog'), auditLogRouter);
+  // Импорт данных — административная операция, то же право, что открывает Настройки.
+  app.use('/api/import', requirePermission('settings'), importRouter);
 
   app.use(errorHandler);
 

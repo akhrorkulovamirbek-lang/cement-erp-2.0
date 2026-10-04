@@ -280,11 +280,15 @@ CREATE TABLE IF NOT EXISTS incoming (
   linked_sale_id INTEGER,
   -- Только для warehouse='CLIENT_GOODS' — кто отдал нам этот цемент в счёт своего долга.
   client_id INTEGER REFERENCES clients(id),
+  -- Раздел «Импорт данных»: массово загруженная историческая запись — не участвует в цепочке
+  -- recomputeWarehouseBalance (см. warehouse/service.ts), только история и кредиторка заводу.
+  is_historical BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE incoming DROP CONSTRAINT IF EXISTS incoming_warehouse_check;
 ALTER TABLE incoming ADD CONSTRAINT incoming_warehouse_check CHECK (warehouse IN ('FACT', 'DIRECT', 'CLIENT_GOODS'));
 ALTER TABLE incoming ADD COLUMN IF NOT EXISTS client_id INTEGER REFERENCES clients(id);
+ALTER TABLE incoming ADD COLUMN IF NOT EXISTS is_historical BOOLEAN NOT NULL DEFAULT false;
 
 -- Остаток «Факт» — по ключу завод + марка + упаковка (раздел 5 ТЗ).
 CREATE TABLE IF NOT EXISTS warehouse_balance (
@@ -327,8 +331,12 @@ CREATE TABLE IF NOT EXISTS sales (
   route TEXT,
   total_sum NUMERIC(16,2) NOT NULL,
   comment TEXT,
+  -- Раздел «Импорт данных»: массово загруженная историческая запись — не участвует в цепочке
+  -- recomputeWarehouseBalance (см. warehouse/service.ts), только история и долг клиента.
+  is_historical BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS is_historical BOOLEAN NOT NULL DEFAULT false;
 
 DO $$ BEGIN
   ALTER TABLE incoming ADD CONSTRAINT incoming_linked_sale_fk FOREIGN KEY (linked_sale_id) REFERENCES sales(id) ON DELETE SET NULL;
@@ -349,8 +357,15 @@ CREATE TABLE IF NOT EXISTS cash_income (
   comment TEXT,
   related_sale_id INTEGER REFERENCES sales(id) ON DELETE SET NULL,
   related_broker_op_id INTEGER REFERENCES broker_operations(id) ON DELETE SET NULL,
+  -- Контрагент иногда платит не от своего имени, а с другой фирмы — просто текст, не справочник.
+  payer_name TEXT,
+  -- Один платёж частями в двух валютах — вторая часть, в валюте, дополняющей currency
+  -- (currency=UZS -> extra_amount в USD, и наоборот). См. UZS_INCOME в reports/routes.ts.
+  extra_amount NUMERIC(16,2),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE cash_income ADD COLUMN IF NOT EXISTS payer_name TEXT;
+ALTER TABLE cash_income ADD COLUMN IF NOT EXISTS extra_amount NUMERIC(16,2);
 
 CREATE TABLE IF NOT EXISTS cash_expense (
   id SERIAL PRIMARY KEY,

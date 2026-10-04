@@ -56,8 +56,8 @@ cashIncomeRouter.post(
   asyncHandler(async (req, res) => {
     const data = cashIncomeSchema.parse(req.body);
     const { rows } = await pool.query(
-      `INSERT INTO cash_income (date, category, client_id, amount, currency, usd_rate, payment_type, comment, related_sale_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      `INSERT INTO cash_income (date, category, client_id, amount, currency, usd_rate, payment_type, comment, related_sale_id, payer_name, extra_amount)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [
         data.date,
         data.category,
@@ -68,6 +68,8 @@ cashIncomeRouter.post(
         data.payment_type,
         data.comment ?? null,
         data.related_sale_id ?? null,
+        data.payer_name ?? null,
+        data.extra_amount ?? null,
       ],
     );
     res.status(201).json(rows[0]);
@@ -80,8 +82,8 @@ cashIncomeRouter.put(
     const data = cashIncomeSchema.parse(req.body);
     const { rows } = await pool.query(
       `UPDATE cash_income SET date=$1, category=$2, client_id=$3, amount=$4, currency=$5, usd_rate=$6,
-         payment_type=$7, comment=$8, related_sale_id=$9
-       WHERE id=$10 RETURNING *`,
+         payment_type=$7, comment=$8, related_sale_id=$9, payer_name=$10, extra_amount=$11
+       WHERE id=$12 RETURNING *`,
       [
         data.date,
         data.category,
@@ -92,6 +94,8 @@ cashIncomeRouter.put(
         data.payment_type,
         data.comment ?? null,
         data.related_sale_id ?? null,
+        data.payer_name ?? null,
+        data.extra_amount ?? null,
         req.params.id,
       ],
     );

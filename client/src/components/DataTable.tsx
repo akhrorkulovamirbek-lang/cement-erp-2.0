@@ -5,6 +5,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -29,6 +30,9 @@ interface DataTableProps<T> {
   onDelete?: (row: T) => void;
   extraRowAction?: (row: T) => ReactNode;
   getRowId: (row: T) => number | string;
+  /** Строка итогов внизу таблицы — один элемент на колонку, в том же порядке, что columns.
+   * Пропустить ячейку — пустая строка/null. Скрывается сама при загрузке/пустом списке. */
+  footer?: ReactNode[];
 }
 
 export function DataTable<T>({
@@ -40,6 +44,7 @@ export function DataTable<T>({
   onDelete,
   extraRowAction,
   getRowId,
+  footer,
 }: DataTableProps<T>) {
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
 
@@ -153,6 +158,25 @@ export function DataTable<T>({
               </TableRow>
             ))}
         </TableBody>
+        {footer && !loading && sorted.length > 0 && (
+          <TableFooter>
+            <TableRow>
+              {columns.map((col, i) => (
+                <TableCell
+                  key={col.key}
+                  className={cn(
+                    'whitespace-nowrap',
+                    col.align === 'right' && 'text-right tabular-nums',
+                    col.align === 'center' && 'text-center',
+                  )}
+                >
+                  {footer[i]}
+                </TableCell>
+              ))}
+              {hasActions && <TableCell />}
+            </TableRow>
+          </TableFooter>
+        )}
       </Table>
     </div>
   );

@@ -5,6 +5,7 @@ import { bankAccountsHooks, cashServiceHooks, useAppSettings, useCashServiceSumm
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable, type Column } from '@/components/DataTable';
 import { FilterBar } from '@/components/FilterBar';
+import { MoneyCell } from '@/components/MoneyCell';
 import { PageHeader } from '@/components/PageHeader';
 import { SidePanel } from '@/components/SidePanel';
 import { StatCard } from '@/components/StatCard';
@@ -137,21 +138,25 @@ export function CashService() {
       header: 'Перевод',
       align: 'right',
       sortValue: (r) => Number(r.transfer_amount),
-      render: (r) => formatMoney(r.transfer_amount, r.currency),
+      render: (r) => <MoneyCell amount={r.transfer_amount} currency={r.currency} usdRate={r.usd_rate} />,
     },
     {
       key: 'commission_amount',
       header: 'Комиссия',
       align: 'right',
       sortValue: (r) => Number(r.commission_amount),
-      render: (r) => <span className="text-emerald-600">{formatMoney(r.commission_amount, r.currency)}</span>,
+      render: (r) => (
+        <div className="text-emerald-600">
+          <MoneyCell amount={r.commission_amount} currency={r.currency} usdRate={r.usd_rate} />
+        </div>
+      ),
     },
     {
       key: 'payout_amount',
       header: 'К выдаче',
       align: 'right',
       sortValue: (r) => Number(r.payout_amount),
-      render: (r) => formatMoney(r.payout_amount, r.currency),
+      render: (r) => <MoneyCell amount={r.payout_amount} currency={r.currency} usdRate={r.usd_rate} />,
     },
     { key: 'comment', header: 'Комментарий', render: (r) => r.comment || '—' },
   ];

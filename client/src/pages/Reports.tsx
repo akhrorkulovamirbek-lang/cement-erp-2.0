@@ -105,15 +105,39 @@ function CementTab() {
     },
   ];
 
+  const rows = report.data ?? [];
+  const totals = rows.reduce(
+    (acc, r) => ({
+      purchased_tonnage: acc.purchased_tonnage + Number(r.purchased_tonnage),
+      purchased_sum: acc.purchased_sum + Number(r.purchased_sum),
+      goods_received_tonnage: acc.goods_received_tonnage + Number(r.goods_received_tonnage),
+      sold_tonnage: acc.sold_tonnage + Number(r.sold_tonnage),
+      sold_sum: acc.sold_sum + Number(r.sold_sum),
+      margin_total: acc.margin_total + Number(r.margin_total),
+    }),
+    { purchased_tonnage: 0, purchased_sum: 0, goods_received_tonnage: 0, sold_tonnage: 0, sold_sum: 0, margin_total: 0 },
+  );
+
   return (
     <div>
       <FilterBar from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
       <DataTable
         columns={columns}
-        rows={report.data ?? []}
+        rows={rows}
         loading={report.isLoading}
         getRowId={(r) => `${r.zavod_name}-${r.cement_mark_name}-${r.packaging}`}
         emptyMessage="Нет данных за период"
+        footer={[
+          'Итого',
+          '',
+          '',
+          formatNumber(totals.purchased_tonnage, 3),
+          formatMoney(totals.purchased_sum),
+          totals.goods_received_tonnage > 0 ? formatNumber(totals.goods_received_tonnage, 3) : '—',
+          formatNumber(totals.sold_tonnage, 3),
+          formatMoney(totals.sold_sum),
+          formatMoney(totals.margin_total),
+        ]}
       />
     </div>
   );
@@ -159,15 +183,36 @@ function VehiclesTab() {
     },
   ];
 
+  const rows = report.data ?? [];
+  const totals = rows.reduce(
+    (acc, r) => ({
+      trip_count: acc.trip_count + r.trip_count,
+      revenue: acc.revenue + Number(r.revenue),
+      cost: acc.cost + Number(r.cost),
+      margin: acc.margin + Number(r.margin),
+    }),
+    { trip_count: 0, revenue: 0, cost: 0, margin: 0 },
+  );
+
   return (
     <div>
       <FilterBar from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
       <DataTable
         columns={columns}
-        rows={report.data ?? []}
+        rows={rows}
         loading={report.isLoading}
         getRowId={(r) => `${r.type}-${r.label}`}
         emptyMessage="Нет рейсов за период"
+        footer={[
+          'Итого',
+          '',
+          String(totals.trip_count),
+          formatMoney(totals.revenue),
+          formatMoney(totals.cost),
+          <span key="margin" className={totals.margin >= 0 ? 'font-medium text-emerald-600' : 'font-medium text-destructive'}>
+            {formatMoney(totals.margin)}
+          </span>,
+        ]}
       />
     </div>
   );
@@ -214,13 +259,31 @@ function ClientsTab() {
     },
   ];
 
+  const rows = balances.data ?? [];
+  const totals = rows.reduce(
+    (acc, r) => ({
+      purchased: acc.purchased + Number(r.purchased),
+      paid: acc.paid + Number(r.paid),
+      balance: acc.balance + Number(r.balance),
+    }),
+    { purchased: 0, paid: 0, balance: 0 },
+  );
+
   return (
     <DataTable
       columns={columns}
-      rows={balances.data ?? []}
+      rows={rows}
       loading={balances.isLoading}
       getRowId={(r) => r.id}
       emptyMessage="Нет клиентов"
+      footer={[
+        'Итого',
+        formatMoney(totals.purchased),
+        formatMoney(totals.paid),
+        <span key="balance" className={totals.balance > 0 ? 'font-semibold text-destructive' : 'font-semibold'}>
+          {formatMoney(totals.balance)}
+        </span>,
+      ]}
     />
   );
 }
@@ -266,13 +329,31 @@ function ZavodyTab() {
     },
   ];
 
+  const rows = balances.data ?? [];
+  const totals = rows.reduce(
+    (acc, r) => ({
+      purchased: acc.purchased + Number(r.purchased),
+      paid: acc.paid + Number(r.paid),
+      balance: acc.balance + Number(r.balance),
+    }),
+    { purchased: 0, paid: 0, balance: 0 },
+  );
+
   return (
     <DataTable
       columns={columns}
-      rows={balances.data ?? []}
+      rows={rows}
       loading={balances.isLoading}
       getRowId={(r) => r.id}
       emptyMessage="Нет заводов"
+      footer={[
+        'Итого',
+        formatMoney(totals.purchased),
+        formatMoney(totals.paid),
+        <span key="balance" className={totals.balance > 0 ? 'font-semibold text-destructive' : 'font-semibold'}>
+          {formatMoney(totals.balance)}
+        </span>,
+      ]}
     />
   );
 }

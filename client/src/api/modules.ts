@@ -276,3 +276,29 @@ export function useChangeOwnPassword() {
     mutationFn: (data: { currentPassword: string; newPassword: string }) => api.post<void>('/auth/change-password', data),
   });
 }
+
+// Импорт данных: Приход/Продажи/Касса/Остаток склада грузятся файлом в один запрос-транзакцию
+// (см. server/src/modules/import) — Клиенты/Заводы переиспользуют обычные useCreate() хуков выше.
+function useImportMutation(path: string, invalidateKeys: string[]) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rows: Record<string, unknown>[]) => api.post<{ count: number }>(path, { rows }),
+    onSuccess: () => invalidateKeys.forEach((key) => qc.invalidateQueries({ queryKey: [key] })),
+  });
+}
+
+export function useImportIncoming() {
+  return useImportMutation('/import/incoming', ['incoming', 'warehouse-balance', ...REPORT_KEYS]);
+}
+
+export function useImportSales() {
+  return useImportMutation('/import/sales', ['sales', 'warehouse-balance', 'tickets', 'broker-account', ...REPORT_KEYS]);
+}
+
+export function useImportCash() {
+  return useImportMutation('/import/cash', ['cash-income', 'cash-expense', ...REPORT_KEYS]);
+}
+
+export function useImportWarehouseSnapshot() {
+  return useImportMutation('/import/warehouse-snapshot', ['warehouse-balance', ...REPORT_KEYS]);
+}

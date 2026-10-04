@@ -33,12 +33,14 @@ export async function recomputeWarehouseBalance(
 ) {
   const incomingRes = await client.query(
     `SELECT id, date, tonnage, price_per_ton, created_at FROM incoming
-     WHERE warehouse IN ('FACT', 'CLIENT_GOODS') AND zavod_id = $1 AND cement_mark_id = $2 AND packaging = $3`,
+     WHERE warehouse IN ('FACT', 'CLIENT_GOODS') AND is_historical = false
+       AND zavod_id = $1 AND cement_mark_id = $2 AND packaging = $3`,
     [zavodId, cementMarkId, packaging],
   );
   const salesRes = await client.query(
     `SELECT id, date, tonnage, created_at FROM sales
-     WHERE source = 'warehouse' AND zavod_id = $1 AND cement_mark_id = $2 AND packaging = $3`,
+     WHERE source = 'warehouse' AND is_historical = false
+       AND zavod_id = $1 AND cement_mark_id = $2 AND packaging = $3`,
     [zavodId, cementMarkId, packaging],
   );
 

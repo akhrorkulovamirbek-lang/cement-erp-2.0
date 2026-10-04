@@ -26,11 +26,15 @@ export function MoneyFields<T extends FieldValues & MoneyFormValues>({
   register,
   watch,
   errors,
+  forceShowRate,
 }: {
   control: Control<T>;
   register: UseFormRegister<T>;
   watch: UseFormWatch<T>;
   errors: FieldErrors<T>;
+  /** Показать курс доллара, даже если основная валюта — сум (например, когда вторая часть
+   * смешанного платежа в долларах и курс всё равно нужен для её конвертации). */
+  forceShowRate?: boolean;
 }) {
   const currency = watch('currency' as Path<T>);
 
@@ -44,7 +48,7 @@ export function MoneyFields<T extends FieldValues & MoneyFormValues>({
           <RHFButtonGroup control={control} name={'currency' as Path<T>} options={CURRENCY_OPTIONS} />
         </FormRow>
       </div>
-      {currency === 'USD' && (
+      {(currency === 'USD' || forceShowRate) && (
         <FormRow label="Курс доллара" error={errors.usd_rate?.message as string | undefined}>
           <Input type="number" step="0.01" {...register('usd_rate' as Path<T>, { required: 'Укажите курс' })} />
         </FormRow>

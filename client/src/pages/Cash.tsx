@@ -14,6 +14,7 @@ import { ButtonGroup } from '@/components/ButtonGroup';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable, type Column } from '@/components/DataTable';
 import { FilterBar } from '@/components/FilterBar';
+import { MoneyCell } from '@/components/MoneyCell';
 import { MoneyFields } from '@/components/MoneyFields';
 import { PageHeader } from '@/components/PageHeader';
 import { QuickAddClient } from '@/components/QuickAddClient';
@@ -40,6 +41,8 @@ interface CashForm {
   usd_rate: string;
   payment_type: 'перечисление' | 'наличка' | 'карта';
   comment: string;
+  payer_name: string;
+  extra_amount: string;
 }
 
 const INCOME_CATEGORY_OPTIONS = [
@@ -77,6 +80,8 @@ const emptyIncomeForm = (): CashForm => ({
   usd_rate: '',
   payment_type: 'перечисление',
   comment: '',
+  payer_name: '',
+  extra_amount: '',
 });
 const emptyExpenseForm = (): CashForm => ({ ...emptyIncomeForm(), category: 'цемент' });
 
@@ -105,12 +110,15 @@ export function Cash() {
   const [deleting, setDeleting] = useState<CashRow | null>(null);
   const [formKind, setFormKind] = useState<'income' | 'expense'>('income');
   const [justAddedClient, setJustAddedClient] = useState<Client | null>(null);
+  const [showSplit, setShowSplit] = useState(false);
 
   const { register, control, handleSubmit, reset, setValue, watch, formState } = useForm<CashForm>({
     defaultValues: emptyIncomeForm(),
   });
   const category = watch('category');
   const carrierNameWatch = watch('carrier_name');
+  const currencyWatch = watch('currency');
+  const splitCurrency = currencyWatch === 'USD' ? 'UZS' : 'USD';
 
   const rows: CashRow[] = useMemo(() => {
     const inc: CashRow[] = (incomeList.data ?? []).map((r) => ({ ...r, kind: 'income' as const }));
@@ -134,11 +142,13 @@ export function Cash() {
 
   function switchKind(kind: string) {
     setFormKind(kind as 'income' | 'expense');
+    setShowSplit(false);
     reset(kind === 'income' ? emptyIncomeForm() : emptyExpenseForm());
   }
 
   function openNew() {
     setFormKind('income');
+    setShowSplit(false);
     reset(emptyIncomeForm());
     setEditing('new');
   }
@@ -146,6 +156,7 @@ export function Cash() {
   function openEdit(row: CashRow) {
     setFormKind(row.kind);
     if (row.kind === 'income') {
+      setShowSplit(Boolean(row.extra_amount));
       reset({
         ...emptyIncomeForm(),
         date: row.date,
@@ -156,8 +167,11 @@ export function Cash() {
         usd_rate: row.usd_rate ?? '',
         payment_type: row.payment_type,
         comment: row.comment ?? '',
+        payer_name: row.payer_name ?? '',
+        extra_amount: row.extra_amount ?? '',
       });
     } else {
+      setShowSplit(false);
       reset({
         ...emptyExpenseForm(),
         date: row.date,
@@ -185,9 +199,11 @@ export function Cash() {
           client_id: data.client_id ? Number(data.client_id) : null,
           amount: Number(data.amount),
           currency: data.currency,
-          usd_rate: data.currency === 'USD' ? Number(data.usd_rate) : null,
+          usd_rate: data.currency === 'USD' || showSplit ? Number(data.usd_rate) : null,
           payment_type: data.payment_type,
           comment: data.comment || null,
+          payer_name: data.payer_name || null,
+          extra_amount: showSplit && data.extra_amount ? Number(data.extra_amount) : null,
         };
         if (editing === 'new') {
           await incomeCreate.mutateAsync(payload as never);
@@ -253,8 +269,13 @@ export function Cash() {
     {
       key: 'counterparty',
       header: 'Контрагент',
-      render: (r) =>
-        r.kind === 'income' ? r.client_name || '—' : r.zavod_name || r.carrier_name || r.machine_number || '—',
+      render: (r) => {
+        if (r.kind === 'income') {
+          const name = r.client_name || '—';
+          return r.payer_name ? `${name} (${r.payer_name})` : name;
+        }
+        return r.zavod_name || r.carrier_name || r.machine_number || '—';
+      },
     },
     {
       key: 'amount',
@@ -262,10 +283,14 @@ export function Cash() {
       align: 'right',
       sortValue: (r) => Number(r.amount),
       render: (r) => (
-        <span className={r.kind === 'income' ? 'font-medium text-emerald-600' : 'font-medium text-destructive'}>
-          {r.kind === 'income' ? '+' : '−'}
-          {formatMoney(r.amount, r.currency)}
-        </span>
+        <div className={r.kind === 'income' ? 'font-medium text-emerald-600' : 'font-medium text-destructive'}>
+          <MoneyCell
+            amount={r.amount}
+            currency={r.currency}
+            usdRate={r.usd_rate}
+            extraAmount={r.kind === 'income' ? r.extra_amount : null}
+          />
+        </div>
       ),
     },
     { key: 'payment_type', header: 'Способ' },
@@ -319,11 +344,17 @@ export function Cash() {
 
             {formKind === 'income' && (
               <div className="space-y-1.5">
-                <FormRow label="Клиент (необязательно)">
+                <FormRow label={category === 'цемент' ? 'Клиент' : 'Клиент (необязательно)'} error={formState.errors.client_id?.message}>
                   <RHFSelect control={control} name="client_id" options={clientOptions} />
                 </FormRow>
                 <QuickAddClient onCreated={selectClient} />
               </div>
+            )}
+
+            {formKind === 'income' && (
+              <FormRow label="Плательщик (необязательно, если платит не сам клиент)">
+                <Input {...register('payer_name')} placeholder="Например, другая фирма" />
+              </FormRow>
             )}
 
             {formKind === 'expense' && category === 'цемент' && (
@@ -381,7 +412,37 @@ export function Cash() {
               </FormRow>
             )}
 
-            <MoneyFields control={control} register={register} watch={watch} errors={formState.errors} />
+            <MoneyFields control={control} register={register} watch={watch} errors={formState.errors} forceShowRate={formKind === 'income' && showSplit} />
+
+            {formKind === 'income' && (
+              <div>
+                {!showSplit ? (
+                  <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setShowSplit(true)}>
+                    + Клиент доплатил в {splitCurrency === 'USD' ? 'долларах' : 'сумах'}
+                  </Button>
+                ) : (
+                  <FormRow
+                    label={`Сумма в ${splitCurrency === 'USD' ? '$' : 'сумах'} (вторая часть платежа)`}
+                    error={formState.errors.extra_amount?.message}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Input type="number" step="0.01" {...register('extra_amount')} />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setShowSplit(false);
+                          setValue('extra_amount', '');
+                        }}
+                      >
+                        Убрать
+                      </Button>
+                    </div>
+                  </FormRow>
+                )}
+              </div>
+            )}
 
             <FormRow label="Комментарий (необязательно)">
               <Input {...register('comment')} />

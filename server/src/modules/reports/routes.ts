@@ -6,7 +6,12 @@ export const reportsRouter = Router();
 
 // Раздел 12.2 ТЗ: цены в Приходе/Продаже — только в сумах, доллары только в движении денег.
 const UZS_SALE = `s.total_sum`;
-const UZS_INCOME = `CASE WHEN currency = 'USD' THEN amount * usd_rate ELSE amount END`;
+// extra_amount — смешанный платёж одной строкой (раздел «Ясность по деньгам»): вторая часть в
+// валюте, дополняющей currency, учитываем её в конвертации тем же курсом usd_rate.
+const UZS_INCOME = `
+  (CASE WHEN currency = 'USD' THEN amount * usd_rate ELSE amount END)
+  + COALESCE(CASE WHEN currency = 'USD' THEN extra_amount ELSE extra_amount * usd_rate END, 0)
+`;
 const UZS_EXPENSE = `CASE WHEN currency = 'USD' THEN amount * usd_rate ELSE amount END`;
 
 // Раздел 9.2 ТЗ «Оплата товаром»: клиент гасит долг цементом — incoming.warehouse='CLIENT_GOODS'

@@ -14,11 +14,18 @@ export const cashIncomeSchema = z
     payment_type: z.enum(['перечисление', 'наличка', 'карта']),
     comment: z.string().trim().optional().nullable(),
     related_sale_id: z.coerce.number().int().positive().optional().nullable(),
+    // Контрагент иногда платит не от своего имени, а с другой фирмы — просто текст.
+    payer_name: z.string().trim().optional().nullable(),
+    // Один платёж частями в двух валютах — вторая часть, в валюте, дополняющей currency.
+    extra_amount: z.coerce.number().positive('Сумма должна быть больше нуля').optional().nullable(),
     ...currencyFields,
   })
   .superRefine((data, ctx) => {
-    if (data.currency === 'USD' && !data.usd_rate) {
+    if ((data.currency === 'USD' || data.extra_amount) && !data.usd_rate) {
       ctx.addIssue({ code: 'custom', path: ['usd_rate'], message: 'Укажите курс доллара' });
+    }
+    if (data.category === 'цемент' && !data.client_id) {
+      ctx.addIssue({ code: 'custom', path: ['client_id'], message: 'Выберите клиента' });
     }
   });
 

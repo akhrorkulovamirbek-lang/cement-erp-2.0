@@ -268,6 +268,8 @@ export interface CashIncome {
   payment_type: PaymentType;
   comment: string | null;
   related_sale_id: number | null;
+  payer_name: string | null;
+  extra_amount: string | null;
   created_at: string;
 }
 
