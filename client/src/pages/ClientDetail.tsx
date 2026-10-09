@@ -21,7 +21,8 @@ import { StatCard } from '@/components/StatCard';
 import { RHFButtonGroup } from '@/components/ButtonGroup';
 import { FormRow, Input, RHFSelect } from '@/components/form';
 import { Button } from '@/components/ui/button';
-import { PACKAGING_OPTIONS } from '@/lib/constants';
+import { PACKAGING_LABELS, PACKAGING_OPTIONS, VEHICLE_TYPE_LABELS } from '@/lib/constants';
+import { downloadWorkbook } from '@/lib/fileImport';
 import { formatDate, formatMoney, formatNumber, todayISO } from '@/lib/format';
 import { useToast } from '@/lib/toast';
 import type { CashIncome, Incoming, Sale } from '@/types';
@@ -150,6 +151,70 @@ export function ClientDetail() {
     }
   }
 
+  function exportToExcel() {
+    const salesRows = [...(sales.data ?? [])]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((r) => {
+        const vehicle =
+          r.vehicle_type === 'OWN'
+            ? (r.own_vehicle_number ?? r.machine_number ?? '')
+            : r.vehicle_type === 'HIRED'
+              ? `${r.carrier_name ?? ''} ${r.machine_number ?? ''}`.trim()
+              : (r.machine_number ?? '');
+        return [
+          r.date,
+          r.sale_type === 'CEMENT' ? 'Цемент' : 'Логистика',
+          r.zavod_name ?? '',
+          r.cement_mark_name ?? '',
+          r.packaging ? PACKAGING_LABELS[r.packaging] : '',
+          Number(r.tonnage),
+          r.price_per_ton ? Number(r.price_per_ton) : null,
+          VEHICLE_TYPE_LABELS[r.vehicle_type],
+          vehicle,
+          r.freight_price_per_ton ? Number(r.freight_price_per_ton) : null,
+          Number(r.total_sum),
+        ];
+      });
+    const paymentRows = [
+      ...(payments.data ?? []).map((r) => {
+        const rate = Number(r.usd_rate || 0);
+        const toUzs = (v: number, c: string) => (c === 'USD' ? v * rate : v);
+        const extraCur = r.currency === 'USD' ? 'UZS' : 'USD';
+        const total = toUzs(Number(r.amount), r.currency) + (r.extra_amount ? toUzs(Number(r.extra_amount), extraCur) : 0);
+        const original = [`${formatNumber(r.amount, 2)} ${r.currency}`, r.extra_amount ? `${formatNumber(r.extra_amount, 2)} ${extraCur}` : '']
+          .filter(Boolean)
+          .join(' + ');
+        return [r.date, 'Деньги', r.payer_name ?? '', r.payment_type, original, total, r.comment ?? ''];
+      }),
+      ...goodsPayments.map((r) => [r.date, 'Товаром', '', '', `${formatNumber(r.tonnage, 3)} т`, Number(r.total_sum), r.comment ?? '']),
+    ].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+
+    const totalTonnage = salesRows.reduce((s, r) => s + (r[5] as number), 0);
+    downloadWorkbook(`Клиент_${client?.name ?? clientId}.xlsx`, [
+      {
+        name: 'Итого',
+        rows: [
+          ['Клиент', client?.name ?? ''],
+          ['Куплено всего, сум', Number(balance?.purchased ?? 0)],
+          ['Оплачено всего, сум', Number(balance?.paid ?? 0)],
+          ['Текущий долг, сум', Number(balance?.balance ?? 0)],
+          ['Всего тонн', totalTonnage],
+        ],
+      },
+      {
+        name: 'Покупки',
+        rows: [
+          ['Дата', 'Тип', 'Завод', 'Марка', 'Упаковка', 'Тоннаж, т', 'Цена за тонну, сум', 'Тип машины', 'Машина', 'Цена доставки за тонну, сум', 'Сумма, сум'],
+          ...salesRows,
+        ],
+      },
+      {
+        name: 'Оплаты',
+        rows: [['Дата', 'Вид', 'Плательщик', 'Способ', 'Как заплатил', 'Сумма, сум', 'Комментарий'], ...paymentRows],
+      },
+    ]);
+  }
+
   const salesColumns: Column<Sale>[] = [
     { key: 'date', header: 'Дата', sortValue: (r) => r.date, render: (r) => formatDate(r.date) },
     {
@@ -250,6 +315,9 @@ export function ClientDetail() {
         subtitle={client?.phone ?? undefined}
         action={
           <div className="flex gap-2">
+            <Button variant="outline" onClick={exportToExcel}>
+              Скачать в Excel
+            </Button>
             <Button variant="outline" onClick={openPayGoods}>
               Погасить товаром
             </Button>
