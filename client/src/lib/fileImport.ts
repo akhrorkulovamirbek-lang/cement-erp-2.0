@@ -35,16 +35,3 @@ export function downloadTemplate(filename: string, headers: string[]) {
   XLSX.utils.book_append_sheet(workbook, sheet, 'Шаблон');
   XLSX.writeFile(workbook, filename);
 }
-
-/** Скачивает .xlsx с несколькими листами; каждый лист — массив строк-массивов (первая строка — заголовки). */
-export function downloadWorkbook(filename: string, sheets: { name: string; rows: (string | number | null)[][] }[]) {
-  const workbook = XLSX.utils.book_new();
-  for (const s of sheets) {
-    const sheet = XLSX.utils.aoa_to_sheet(s.rows);
-    sheet['!cols'] = s.rows[0]?.map((_, i) => ({
-      wch: Math.min(40, Math.max(10, ...s.rows.map((r) => String(r[i] ?? '').length + 2))),
-    }));
-    XLSX.utils.book_append_sheet(workbook, sheet, s.name.slice(0, 31));
-  }
-  XLSX.writeFile(workbook, filename);
-}
