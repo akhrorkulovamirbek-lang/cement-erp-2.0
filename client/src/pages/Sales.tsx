@@ -287,21 +287,21 @@ export function Sales() {
         <PlainSelect
           value={clientFilter}
           onValueChange={setClientFilter}
-          className="w-48"
+          className="w-full sm:w-48"
           placeholder="Все клиенты"
           options={[{ value: '', label: 'Все клиенты' }, ...(clients.data ?? []).map((c) => ({ value: String(c.id), label: c.name }))]}
         />
         <PlainSelect
           value={typeFilter}
           onValueChange={setTypeFilter}
-          className="w-40"
+          className="w-full sm:w-40"
           placeholder="Все типы"
           options={[{ value: '', label: 'Все типы' }, ...SALE_TYPE_OPTIONS]}
         />
         <PlainSelect
           value={deferredFilter}
           onValueChange={setDeferredFilter}
-          className="w-48"
+          className="w-full sm:w-48"
           placeholder="Все продажи"
           options={[
             { value: '', label: 'Все продажи' },

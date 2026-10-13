@@ -457,7 +457,7 @@ export function IncomingPage() {
         <PlainSelect
           value={zavodFilter}
           onValueChange={setZavodFilter}
-          className="w-48"
+          className="w-full sm:w-48"
           placeholder="Все заводы"
           options={[{ value: '', label: 'Все заводы' }, ...(zavody.data ?? []).map((z) => ({ value: String(z.id), label: z.name }))]}
         />

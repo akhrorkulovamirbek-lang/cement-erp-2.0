@@ -24,16 +24,16 @@ export function FilterBar({
   children,
 }: FilterBarProps) {
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-2">
-      <Input type="date" value={from} onChange={(e) => onFromChange(e.target.value)} className="w-40" />
-      <span className="text-muted-foreground">—</span>
-      <Input type="date" value={to} onChange={(e) => onToChange(e.target.value)} className="w-40" />
+    <div className="mb-3 grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
+      <Input type="date" value={from} onChange={(e) => onFromChange(e.target.value)} className="w-full sm:w-40" />
+      <span className="hidden text-muted-foreground sm:inline">—</span>
+      <Input type="date" value={to} onChange={(e) => onToChange(e.target.value)} className="w-full sm:w-40" />
       {onQChange && (
         <Input
           value={q ?? ''}
           onChange={(e) => onQChange(e.target.value)}
           placeholder={qPlaceholder}
-          className="w-52"
+          className="col-span-2 w-full sm:col-span-1 sm:w-52"
         />
       )}
       {children}

@@ -13,12 +13,12 @@ export function StatCard({
   tone?: 'default' | 'positive' | 'negative';
 }) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
+    <Card className="gap-1 py-3 sm:gap-6 sm:py-6">
+      <CardHeader className="pb-1 sm:pb-2">
         <CardDescription>{label}</CardDescription>
         <CardTitle
           className={cn(
-            'text-2xl tabular-nums',
+            'text-xl tabular-nums sm:text-2xl',
             tone === 'positive' && 'text-emerald-600',
             tone === 'negative' && 'text-destructive',
           )}

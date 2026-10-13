@@ -4,6 +4,7 @@ import {
   History,
   LayoutDashboard,
   LogOut,
+  Menu,
   Package,
   Settings as SettingsIcon,
   Users as UsersIcon,
@@ -25,6 +26,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/context/AuthContext';
 import { ROLE_LABELS } from '@/types';
@@ -101,32 +103,53 @@ export function AppLayout() {
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger />
+          <span className="text-sm font-semibold md:hidden">Cement ERP</span>
         </header>
-        <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
-          <div className="mx-auto max-w-7xl p-6">
+        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+          <div className="mx-auto max-w-7xl p-4 sm:p-6">
             <Outlet />
           </div>
         </main>
       </SidebarInset>
 
-      {/* Раздел 10 ТЗ: на телефоне меню превращается в нижнюю панель. */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t bg-background md:hidden">
-        {visibleItems.slice(0, 5).map((item) => {
-          const active = item.end ? pathname === item.to : pathname.startsWith(item.to);
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={`flex flex-1 flex-col items-center justify-center gap-0.5 text-xs ${
-                active ? 'text-primary' : 'text-muted-foreground'
-              }`}
-            >
-              <item.icon className="size-5" />
-              {item.label}
-            </NavLink>
-          );
-        })}
-      </nav>
+      <MobileNav items={visibleItems} pathname={pathname} />
     </SidebarProvider>
+  );
+}
+
+/** Раздел 10 ТЗ: на телефоне меню превращается в нижнюю панель — четыре главных раздела под
+ * большой палец и «Меню» со всеми остальными (то же боковое меню, что открывается на компьютере). */
+function MobileNav({ items, pathname }: { items: NavItem[]; pathname: string }) {
+  const { toggleSidebar } = useSidebar();
+  const main = items.slice(0, 4);
+  const hiddenActive = items.slice(4).some((item) => pathname.startsWith(item.to));
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden">
+      {main.map((item) => {
+        const active = item.end ? pathname === item.to : pathname.startsWith(item.to);
+        return (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[11px] ${
+              active ? 'text-primary' : 'text-muted-foreground'
+            }`}
+          >
+            <item.icon className="size-5" />
+            <span className="max-w-full truncate">{item.label}</span>
+          </NavLink>
+        );
+      })}
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[11px] ${
+          hiddenActive ? 'text-primary' : 'text-muted-foreground'
+        }`}
+      >
+        <Menu className="size-5" />
+        <span>Меню</span>
+      </button>
+    </nav>
   );
 }

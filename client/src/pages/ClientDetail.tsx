@@ -456,7 +456,7 @@ export function ClientDetail() {
         title={client?.name ?? '...'}
         subtitle={client?.phone ?? undefined}
         action={
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
             <Button variant="outline" onClick={openAdjust}>
               Корректировка долга
             </Button>

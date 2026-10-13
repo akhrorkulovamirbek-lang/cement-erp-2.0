@@ -73,8 +73,64 @@ export function DataTable<T>({
     });
   }
 
+  const cardRows = !loading ? sorted : [];
+
   return (
-    <div className="rounded-md border overflow-x-auto">
+    <>
+    {/* Телефон: каждая запись — карточка «поле: значение», а не широкая таблица с прокруткой. */}
+    <div className="space-y-2 md:hidden">
+      {loading && <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">Загрузка…</div>}
+      {!loading && cardRows.length === 0 && (
+        <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">{emptyMessage}</div>
+      )}
+      {cardRows.map((row) => (
+        <div key={getRowId(row)} className="rounded-lg border bg-card p-3 text-sm shadow-xs">
+          <dl className="space-y-1.5">
+            {columns.map((col) => {
+              const content = col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? '');
+              if (content === '' || content === null || content === undefined) return null;
+              return (
+                <div key={col.key} className="flex items-start justify-between gap-3">
+                  <dt className="shrink-0 text-muted-foreground">{col.header}</dt>
+                  <dd className="min-w-0 text-right font-medium break-words tabular-nums">{content}</dd>
+                </div>
+              );
+            })}
+          </dl>
+          {hasActions && (
+            <div className="mt-2 flex justify-end gap-1 border-t pt-2">
+              {extraRowAction?.(row)}
+              {onEdit && (
+                <Button variant="outline" size="sm" onClick={() => onEdit(row)}>
+                  <Pencil className="size-4" /> Изменить
+                </Button>
+              )}
+              {onDelete && (
+                <Button variant="outline" size="sm" onClick={() => onDelete(row)}>
+                  <Trash2 className="size-4" /> Удалить
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+      {footer && !loading && sorted.length > 0 && (
+        <div className="rounded-lg border bg-muted/50 p-3 text-sm font-medium">
+          <div className="space-y-1.5">
+            {columns.map((col, i) =>
+              footer[i] ? (
+                <div key={col.key} className="flex items-start justify-between gap-3">
+                  <span className="shrink-0 text-muted-foreground">{col.header}</span>
+                  <span className="text-right tabular-nums">{footer[i]}</span>
+                </div>
+              ) : null,
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+
+    <div className="hidden overflow-x-auto rounded-md border md:block">
       <Table>
         <TableHeader>
           <TableRow>
@@ -179,5 +235,6 @@ export function DataTable<T>({
         )}
       </Table>
     </div>
+    </>
   );
 }

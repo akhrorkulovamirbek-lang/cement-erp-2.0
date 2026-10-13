@@ -69,14 +69,14 @@ export function AuditLog() {
         <PlainSelect
           value={userId}
           onValueChange={setUserId}
-          className="w-48"
+          className="w-full sm:w-48"
           placeholder="Все пользователи"
           options={[{ value: '', label: 'Все пользователи' }, ...(users.data ?? []).map((u) => ({ value: String(u.id), label: u.full_name }))]}
         />
         <PlainSelect
           value={action}
           onValueChange={setAction}
-          className="w-48"
+          className="w-full sm:w-48"
           placeholder="Все действия"
           options={[{ value: '', label: 'Все действия' }, ...Object.entries(ACTION_LABELS).map(([value, label]) => ({ value, label }))]}
         />

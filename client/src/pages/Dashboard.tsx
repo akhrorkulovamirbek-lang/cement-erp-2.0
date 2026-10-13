@@ -28,10 +28,10 @@ export function Dashboard() {
         title="Панель"
         subtitle="Обзор бизнеса"
         action={
-          <div className="flex items-center gap-2">
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
-            <span className="text-muted-foreground">—</span>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
+          <div className="grid grid-cols-2 items-center gap-2 sm:flex">
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full sm:w-40" />
+            <span className="hidden text-muted-foreground sm:inline">—</span>
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-full sm:w-40" />
           </div>
         }
       />
