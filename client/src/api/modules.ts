@@ -336,3 +336,12 @@ export function useImportCash() {
 export function useImportWarehouseSnapshot() {
   return useImportMutation('/import/warehouse-snapshot', ['warehouse-balance', ...REPORT_KEYS]);
 }
+
+// Опасная зона в Настройках: стирает все рабочие данные (пользователи, права и настройки остаются).
+export function useClearAllData() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (confirm: string) => api.post<{ ok: boolean }>('/admin/clear-data', { confirm }),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}

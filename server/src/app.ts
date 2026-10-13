@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { auditResource } from './core/audit.js';
 import { authRouter } from './modules/auth/routes.js';
+import { adminRouter } from './modules/admin/routes.js';
 import { auditLogRouter } from './modules/auditLog/routes.js';
 import { bankAccountsRouter } from './modules/bankAccounts/routes.js';
 import { brokerRouter } from './modules/broker/routes.js';
@@ -100,6 +101,7 @@ export function createApp() {
   app.use('/api/audit-log', requirePermission('auditLog'), auditLogRouter);
   // Импорт данных — административная операция, то же право, что открывает Настройки.
   app.use('/api/import', requirePermission('settings'), importRouter);
+  app.use('/api/admin', requirePermission('settings'), adminRouter);
 
   app.use(errorHandler);
 

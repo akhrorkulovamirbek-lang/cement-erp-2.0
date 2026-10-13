@@ -3,6 +3,7 @@ import { ApiError } from '@/api/client';
 import {
   clientsHooks,
   useAppSettings,
+  useClearAllData,
   useImportCash,
   useImportIncoming,
   useImportSales,
@@ -242,7 +243,42 @@ function GeneralTab() {
           </div>
         </CardContent>
       </Card>
+      <ClearDataCard />
     </div>
+  );
+}
+
+function ClearDataCard() {
+  const { notify } = useToast();
+  const clear = useClearAllData();
+  const [word, setWord] = useState('');
+
+  async function onClear() {
+    try {
+      await clear.mutateAsync(word);
+      notify('Все данные удалены');
+      setWord('');
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : 'Ошибка', 'error');
+    }
+  }
+
+  return (
+    <Card className="border-destructive/50">
+      <CardContent className="p-4">
+        <div className="font-medium text-destructive">Очистить все данные</div>
+        <p className="mt-0.5 mb-3 text-sm text-muted-foreground">
+          Удаляет клиентов, заводы, марки, машины, банковские счета, приходы, продажи, тикеты, кассу, обналичивание и корректировки,
+          обнуляет брокерский счёт. Пользователи, права, настройки и журнал действий остаются. Действие нельзя отменить.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input value={word} onChange={(e) => setWord(e.target.value)} placeholder="Впишите слово УДАЛИТЬ" className="w-56" />
+          <Button variant="destructive" disabled={word !== 'УДАЛИТЬ' || clear.isPending} onClick={onClear}>
+            Очистить все данные
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
