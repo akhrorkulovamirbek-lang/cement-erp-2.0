@@ -150,11 +150,6 @@ function VehiclesTab() {
 
   const columns: Column<VehicleReportRow>[] = [
     { key: 'label', header: 'Машина / Перевозчик', sortValue: (r) => r.label },
-    {
-      key: 'type',
-      header: 'Тип',
-      render: (r) => (r.type === 'own' ? <Badge tone="slate">Своя</Badge> : <Badge tone="amber">Наёмная</Badge>),
-    },
     { key: 'trip_count', header: 'Рейсов', align: 'right', sortValue: (r) => r.trip_count },
     {
       key: 'revenue',

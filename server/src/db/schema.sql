@@ -337,6 +337,9 @@ CREATE TABLE IF NOT EXISTS sales (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS is_historical BOOLEAN NOT NULL DEFAULT false;
+-- «Отложка»: продажа записана (цемент ушёл, остатки списаны), а клиент и цены вносятся позже.
+ALTER TABLE sales ALTER COLUMN client_id DROP NOT NULL;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS is_deferred BOOLEAN NOT NULL DEFAULT false;
 
 DO $$ BEGIN
   ALTER TABLE incoming ADD CONSTRAINT incoming_linked_sale_fk FOREIGN KEY (linked_sale_id) REFERENCES sales(id) ON DELETE SET NULL;
@@ -387,7 +390,9 @@ CREATE TABLE IF NOT EXISTS cash_expense (
 ALTER TABLE cash_expense ADD COLUMN IF NOT EXISTS carrier_name TEXT;
 ALTER TABLE cash_expense ALTER COLUMN expense_type DROP NOT NULL;
 ALTER TABLE cash_expense DROP CONSTRAINT IF EXISTS cash_expense_category_check;
-ALTER TABLE cash_expense ADD CONSTRAINT cash_expense_category_check CHECK (category IN ('цемент', 'логистика', 'перевозчик', 'прочее', 'обналичивание'));
+ALTER TABLE cash_expense ADD CONSTRAINT cash_expense_category_check CHECK (category IN ('цемент', 'логистика', 'перевозчик', 'прочее', 'обналичивание', 'брокер'));
+-- Пополнение брокерского счёта — расход кассы (category='брокер'), связанный с broker_operations.
+ALTER TABLE cash_expense ADD COLUMN IF NOT EXISTS related_broker_op_id INTEGER REFERENCES broker_operations(id) ON DELETE SET NULL;
 
 -- Обналичивание: приём перевода на банковский счёт, выдача наличных за вычетом комиссии.
 -- Выдача отражается связанной строкой cash_expense (category='обналичивание') — см.
@@ -429,3 +434,14 @@ CREATE INDEX IF NOT EXISTS idx_settlement_movement_counterparty ON settlement_mo
 CREATE INDEX IF NOT EXISTS idx_settlement_movement_document ON settlement_movement(document_type, document_id);
 CREATE INDEX IF NOT EXISTS idx_money_movement_account ON money_movement(account);
 CREATE INDEX IF NOT EXISTS idx_money_movement_document ON money_movement(document_type, document_id);
+
+-- Корректировка долга клиента: amount > 0 увеличивает долг, amount < 0 уменьшает. Причина обязательна.
+CREATE TABLE IF NOT EXISTS client_debt_adjustments (
+  id SERIAL PRIMARY KEY,
+  client_id INTEGER NOT NULL REFERENCES clients(id),
+  date DATE NOT NULL,
+  amount NUMERIC(16,2) NOT NULL CHECK (amount <> 0),
+  comment TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_client_debt_adjustments_client ON client_debt_adjustments(client_id);

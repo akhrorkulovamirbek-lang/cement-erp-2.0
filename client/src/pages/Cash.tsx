@@ -5,8 +5,12 @@ import {
   cashExpenseHooks,
   cashIncomeHooks,
   clientsHooks,
+  logisticsExpenseCategoriesHooks,
+  machinesHooks,
   useCarrierBalances,
   useCashBalances,
+  useSuggestions,
+  useTicketReturns,
   zavodyHooks,
 } from '@/api/modules';
 import { Badge } from '@/components/Badge';
@@ -21,12 +25,17 @@ import { QuickAddClient } from '@/components/QuickAddClient';
 import { SidePanel } from '@/components/SidePanel';
 import { StatCard } from '@/components/StatCard';
 import { FormRow, Input, RHFSelect } from '@/components/form';
+import { SuggestInput } from '@/components/SuggestInput';
 import { Button } from '@/components/ui/button';
 import { formatDate, formatMoney, todayISO } from '@/lib/format';
+import { normalizePlateNumber } from '@/lib/utils';
 import { useToast } from '@/lib/toast';
-import type { CashExpense, CashIncome, Client } from '@/types';
+import type { CashExpense, CashIncome, Client, TicketReturnInfo } from '@/types';
 
-type CashRow = (CashIncome & { kind: 'income' }) | (CashExpense & { kind: 'expense' });
+type CashRow =
+  | (CashIncome & { kind: 'income' })
+  | (CashExpense & { kind: 'expense' })
+  | (TicketReturnInfo & { kind: 'info' });
 
 interface CashForm {
   date: string;
@@ -93,12 +102,17 @@ export function Cash() {
   const carrierBalances = useCarrierBalances();
   const clients = clientsHooks.useList();
   const zavody = zavodyHooks.useList();
+  const expenseCategories = logisticsExpenseCategoriesHooks.useList();
+  const machines = machinesHooks.useList();
+  const createMachine = machinesHooks.useCreate();
+  const suggestions = useSuggestions();
 
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const incomeList = cashIncomeHooks.useList({ from: from || undefined, to: to || undefined });
   const expenseList = cashExpenseHooks.useList({ from: from || undefined, to: to || undefined });
+  const ticketReturns = useTicketReturns({ from: from || undefined, to: to || undefined });
   const incomeCreate = cashIncomeHooks.useCreate();
   const incomeUpdate = cashIncomeHooks.useUpdate();
   const incomeDelete = cashIncomeHooks.useDelete();
@@ -117,16 +131,18 @@ export function Cash() {
   });
   const category = watch('category');
   const carrierNameWatch = watch('carrier_name');
+  const machineNumberWatch = watch('machine_number');
   const currencyWatch = watch('currency');
   const splitCurrency = currencyWatch === 'USD' ? 'UZS' : 'USD';
 
   const rows: CashRow[] = useMemo(() => {
     const inc: CashRow[] = (incomeList.data ?? []).map((r) => ({ ...r, kind: 'income' as const }));
     const exp: CashRow[] = (expenseList.data ?? []).map((r) => ({ ...r, kind: 'expense' as const }));
-    const merged = [...inc, ...exp].sort((a, b) => (a.date === b.date ? b.id - a.id : a.date < b.date ? 1 : -1));
+    const info: CashRow[] = typeFilter ? [] : (ticketReturns.data ?? []).map((r) => ({ ...r, kind: 'info' as const }));
+    const merged = [...inc, ...exp, ...info].sort((a, b) => (a.date === b.date ? b.id - a.id : a.date < b.date ? 1 : -1));
     if (!typeFilter) return merged;
     return merged.filter((r) => r.kind === typeFilter);
-  }, [incomeList.data, expenseList.data, typeFilter]);
+  }, [incomeList.data, expenseList.data, ticketReturns.data, typeFilter]);
 
   const clientOptions = (
     justAddedClient && !(clients.data ?? []).some((c) => c.id === justAddedClient.id)
@@ -153,7 +169,20 @@ export function Cash() {
     setEditing('new');
   }
 
+  function readOnlyReason(row: CashRow): string | null {
+    if (row.kind === 'info') return 'Это информационная запись о возврате тикета на брокерский счёт — её нельзя менять отсюда';
+    if (row.kind === 'expense' && row.related_broker_op_id) return 'Это пополнение брокерского счёта — оно ведётся в разделе «Приход» → брокерский счёт';
+    if (row.kind === 'expense' && row.category === 'обналичивание') return 'Эта выдача связана с обналичиванием — меняйте её в разделе «Обналичивание»';
+    return null;
+  }
+
   function openEdit(row: CashRow) {
+    const reason = readOnlyReason(row);
+    if (reason) {
+      notify(reason, 'error');
+      return;
+    }
+    if (row.kind === 'info') return;
     setFormKind(row.kind);
     if (row.kind === 'income') {
       setShowSplit(Boolean(row.extra_amount));
@@ -187,7 +216,7 @@ export function Cash() {
         comment: row.comment ?? '',
       });
     }
-    setEditing(row);
+    setEditing(row as Exclude<CashRow, { kind: 'info' }>);
   }
 
   async function onSubmit(data: CashForm) {
@@ -241,7 +270,7 @@ export function Cash() {
   }
 
   async function onDelete() {
-    if (!deleting) return;
+    if (!deleting || deleting.kind === 'info') return;
     try {
       if (deleting.kind === 'income') await incomeDelete.mutateAsync(deleting.id);
       else await expenseDelete.mutateAsync(deleting.id);
@@ -258,22 +287,55 @@ export function Cash() {
   );
   const carrierDebt = matchedCarrier ? Number(matchedCarrier.balance) : 0;
 
+  const expenseTypeOptions = (expenseCategories.data ?? [])
+    .filter((c) => c.active || c.name === watch('expense_type'))
+    .map((c) => ({ value: c.name, label: c.name }));
+  const normalizedMachine = normalizePlateNumber(machineNumberWatch ?? '');
+  const machineMissing =
+    formKind === 'expense' &&
+    category === 'логистика' &&
+    normalizedMachine.length > 0 &&
+    machines.isSuccess &&
+    !(machines.data ?? []).some((m) => m.number === normalizedMachine);
+
+  async function addMachineToBase() {
+    try {
+      await createMachine.mutateAsync({ number: normalizedMachine });
+      notify(`Машина ${normalizedMachine} добавлена в базу`);
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : 'Ошибка', 'error');
+    }
+  }
+
   const columns: Column<CashRow>[] = [
     { key: 'date', header: 'Дата', sortValue: (r) => r.date, render: (r) => formatDate(r.date) },
     {
       key: 'kind',
       header: 'Тип',
-      render: (r) => (r.kind === 'income' ? <Badge tone="green">Приход</Badge> : <Badge tone="red">Расход</Badge>),
+      render: (r) => {
+        if (r.kind === 'info') return <Badge tone="blue">Информация</Badge>;
+        return r.kind === 'income' ? <Badge tone="green">Приход</Badge> : <Badge tone="red">Расход</Badge>;
+      },
     },
-    { key: 'category', header: 'Категория' },
+    {
+      key: 'category',
+      header: 'Категория',
+      render: (r) => {
+        if (r.kind === 'info') return 'Возврат тикета';
+        if (r.kind === 'expense' && r.category === 'брокер') return 'Пополнение брокерского счёта';
+        return r.category;
+      },
+    },
     {
       key: 'counterparty',
       header: 'Контрагент',
       render: (r) => {
+        if (r.kind === 'info') return r.ticket_number ? `Тикет ${r.ticket_number} → брокерский счёт` : 'Брокерский счёт';
         if (r.kind === 'income') {
           const name = r.client_name || '—';
           return r.payer_name ? `${name} (${r.payer_name})` : name;
         }
+        if (r.category === 'брокер') return 'Брокерский счёт';
         return r.zavod_name || r.carrier_name || r.machine_number || '—';
       },
     },
@@ -282,7 +344,13 @@ export function Cash() {
       header: 'Сумма',
       align: 'right',
       sortValue: (r) => Number(r.amount),
-      render: (r) => (
+      render: (r) =>
+        r.kind === 'info' ? (
+          <div className="text-muted-foreground">
+            <div>{formatMoney(r.amount)}</div>
+            <div className="text-xs">в кассу не поступает</div>
+          </div>
+        ) : (
         <div className={r.kind === 'income' ? 'font-medium text-emerald-600' : 'font-medium text-destructive'}>
           <MoneyCell
             amount={r.amount}
@@ -291,20 +359,31 @@ export function Cash() {
             extraAmount={r.kind === 'income' ? r.extra_amount : null}
           />
         </div>
-      ),
+        ),
     },
-    { key: 'payment_type', header: 'Способ' },
-    { key: 'comment', header: 'Комментарий', render: (r) => r.comment || '—' },
+    { key: 'payment_type', header: 'Способ', render: (r) => (r.kind === 'info' ? '—' : r.payment_type) },
+    {
+      key: 'comment',
+      header: 'Комментарий',
+      render: (r) => (r.kind === 'info' ? r.description || 'Остаток тикета возвращён на брокерский счёт' : r.comment || '—'),
+    },
   ];
 
   return (
     <div>
       <PageHeader title="Касса" subtitle="Приход и расход денег — единым списком" />
 
+      <h2 className="mb-2 text-sm font-semibold">Касса в сумах</h2>
+      <div className="mb-4 grid gap-4 sm:grid-cols-3">
+        <StatCard label="Наличные" value={formatMoney(cashBalances.data?.uzs.наличка ?? 0)} />
+        <StatCard label="Карта" value={formatMoney(cashBalances.data?.uzs.карта ?? 0)} />
+        <StatCard label="Перевод" value={formatMoney(cashBalances.data?.uzs.перечисление ?? 0)} />
+      </div>
+      <h2 className="mb-2 text-sm font-semibold">Касса в долларах</h2>
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Наличные" value={formatMoney(cashBalances.data?.наличка ?? 0)} />
-        <StatCard label="Карта" value={formatMoney(cashBalances.data?.карта ?? 0)} />
-        <StatCard label="Перевод" value={formatMoney(cashBalances.data?.перечисление ?? 0)} />
+        <StatCard label="Наличные" value={formatMoney(cashBalances.data?.usd.наличка ?? 0, 'USD')} />
+        <StatCard label="Карта" value={formatMoney(cashBalances.data?.usd.карта ?? 0, 'USD')} />
+        <StatCard label="Перевод" value={formatMoney(cashBalances.data?.usd.перечисление ?? 0, 'USD')} />
       </div>
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -322,7 +401,11 @@ export function Cash() {
         loading={incomeList.isLoading || expenseList.isLoading}
         getRowId={(r) => `${r.kind}-${r.id}`}
         onEdit={openEdit}
-        onDelete={setDeleting}
+        onDelete={(row) => {
+          const reason = readOnlyReason(row);
+          if (reason) notify(reason, 'error');
+          else setDeleting(row);
+        }}
       />
 
       {editing && (
@@ -353,7 +436,7 @@ export function Cash() {
 
             {formKind === 'income' && (
               <FormRow label="Плательщик (необязательно, если платит не сам клиент)">
-                <Input {...register('payer_name')} placeholder="Например, другая фирма" />
+                <SuggestInput {...register('payer_name')} options={suggestions.data?.payers ?? []} placeholder="Например, другая фирма" />
               </FormRow>
             )}
 
@@ -368,21 +451,24 @@ export function Cash() {
             )}
             {formKind === 'expense' && category === 'логистика' && (
               <FormRow label="Номер машины (необязательно)">
-                <Input {...register('machine_number')} />
+                <SuggestInput {...register('machine_number')} options={suggestions.data?.plates ?? []} />
+                {machineMissing && (
+                  <p className="mt-1.5 flex items-center justify-between gap-2 text-xs text-amber-700">
+                    <span>Машины с номером {normalizePlateNumber(machineNumberWatch)} нет в базе «Свои машины» — её нужно добавить.</span>
+                    <Button type="button" variant="link" size="sm" className="h-auto shrink-0 p-0 text-xs" onClick={addMachineToBase}>
+                      Добавить в базу
+                    </Button>
+                  </p>
+                )}
               </FormRow>
             )}
             {formKind === 'expense' && category === 'перевозчик' && (
               <FormRow label="Перевозчик" error={formState.errors.carrier_name?.message}>
-                <Input
+                <SuggestInput
                   {...register('carrier_name', { required: 'Укажите перевозчика' })}
                   placeholder="Имя или номер машины"
-                  list="carrier-names"
+                  options={[...new Set([...(carrierBalances.data ?? []).map((c) => c.name), ...(suggestions.data?.carriers ?? [])])]}
                 />
-                <datalist id="carrier-names">
-                  {(carrierBalances.data ?? []).map((c) => (
-                    <option key={c.name} value={c.name} />
-                  ))}
-                </datalist>
                 {matchedCarrier && carrierDebt !== 0 && (
                   <p className="mt-1.5 flex items-center justify-between text-xs">
                     <span className={carrierDebt > 0 ? 'text-destructive' : 'text-emerald-600'}>
@@ -403,10 +489,29 @@ export function Cash() {
                 )}
               </FormRow>
             )}
-            {formKind === 'expense' && category !== 'перевозчик' && (
+            {formKind === 'expense' && category === 'логистика' && (
               <FormRow label="Тип расхода" error={formState.errors.expense_type?.message}>
-                <Input
+                {expenseTypeOptions.length > 0 ? (
+                  <RHFSelect control={control} name="expense_type" options={expenseTypeOptions} />
+                ) : (
+                  <>
+                    <SuggestInput
+                      {...register('expense_type', { required: 'Укажите тип расхода' })}
+                      options={suggestions.data?.expenseTypes ?? []}
+                      placeholder="газ / запчасть / зп / обед"
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Чтобы выбирать из списка, добавьте типы в «Контрагенты → Категории расходов логистики».
+                    </p>
+                  </>
+                )}
+              </FormRow>
+            )}
+            {formKind === 'expense' && category !== 'перевозчик' && category !== 'логистика' && (
+              <FormRow label="Тип расхода" error={formState.errors.expense_type?.message}>
+                <SuggestInput
                   {...register('expense_type', { required: 'Укажите тип расхода' })}
+                  options={suggestions.data?.expenseTypes ?? []}
                   placeholder="газ / запчасть / зп / обед"
                 />
               </FormRow>

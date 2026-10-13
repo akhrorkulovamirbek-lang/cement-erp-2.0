@@ -12,6 +12,10 @@ async function assertNotLinkedToCashService(id: string) {
   if (rows[0]) {
     throw conflict('Эта выдача связана с обналичиванием — редактируйте и удаляйте её через раздел «Обналичивание»');
   }
+  const { rows: broker } = await pool.query('SELECT 1 FROM cash_expense WHERE id = $1 AND related_broker_op_id IS NOT NULL', [id]);
+  if (broker[0]) {
+    throw conflict('Эта запись — пополнение брокерского счёта, её нельзя менять или удалять отсюда');
+  }
 }
 
 export const cashIncomeRouter = Router();
@@ -45,6 +49,34 @@ cashIncomeRouter.get(
        LEFT JOIN clients c ON c.id = ci.client_id
        ${where}
        ORDER BY ci.date DESC, ci.id DESC`,
+      params,
+    );
+    res.json(rows);
+  }),
+);
+
+// Возврат тикета на кассе — только информационные строки (деньги вернулись на брокерский счёт, а
+// не в кассу, остатки кассы они не меняют).
+cashIncomeRouter.get(
+  '/ticket-returns',
+  asyncHandler(async (req, res) => {
+    const { from, to } = req.query;
+    const params: unknown[] = [];
+    const conditions = [`bo.type = 'ticket_return'`];
+    if (from) {
+      params.push(from);
+      conditions.push(`bo.date >= $${params.length}`);
+    }
+    if (to) {
+      params.push(to);
+      conditions.push(`bo.date <= $${params.length}`);
+    }
+    const { rows } = await pool.query(
+      `SELECT bo.id, bo.date, bo.amount, bo.description, t.ticket_number
+       FROM broker_operations bo
+       LEFT JOIN tickets t ON t.id = bo.related_ticket_id
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY bo.date DESC, bo.id DESC`,
       params,
     );
     res.json(rows);

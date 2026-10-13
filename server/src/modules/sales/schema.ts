@@ -6,7 +6,9 @@ const vehicleTypeEnum = z.enum(['CLIENT', 'OWN', 'HIRED']);
 const baseSaleSchema = z.object({
   date: z.string().min(1),
   sale_type: z.enum(['CEMENT', 'LOGISTICS']).default('CEMENT'),
-  client_id: z.coerce.number().int().positive('Выберите клиента'),
+  client_id: z.coerce.number().int().positive('Выберите клиента').optional().nullable(),
+  // «Отложка»: клиента и цены можно внести позже.
+  is_deferred: z.coerce.boolean().default(false),
   comment: z.string().trim().optional().nullable().default(null),
 
   // Цемент (раздел 3.1 ТЗ):
@@ -33,6 +35,11 @@ const baseSaleSchema = z.object({
 });
 
 export const saleSchema = baseSaleSchema.superRefine((data, ctx) => {
+  if (data.is_deferred) {
+    validateDeferred(data, ctx);
+    return;
+  }
+  if (!data.client_id) ctx.addIssue({ code: 'custom', path: ['client_id'], message: 'Выберите клиента' });
   if (data.sale_type === 'CEMENT') {
     if (!data.source) {
       ctx.addIssue({ code: 'custom', path: ['source'], message: 'Выберите источник' });
@@ -79,3 +86,24 @@ export const saleSchema = baseSaleSchema.superRefine((data, ctx) => {
     }
   }
 });
+
+// Отложенная продажа: без клиента и цен, но источник цемента и машина должны быть указаны —
+// это то, что физически произошло и списывает остатки.
+function validateDeferred(data: z.infer<typeof baseSaleSchema>, ctx: z.RefinementCtx) {
+  if (data.sale_type === 'CEMENT') {
+    if (!data.source) {
+      ctx.addIssue({ code: 'custom', path: ['source'], message: 'Выберите источник' });
+    } else if (data.source === 'ticket') {
+      if (!data.ticket_id) ctx.addIssue({ code: 'custom', path: ['ticket_id'], message: 'Выберите тикет' });
+    } else {
+      if (!data.zavod_id) ctx.addIssue({ code: 'custom', path: ['zavod_id'], message: 'Выберите завод' });
+      if (!data.cement_mark_id) ctx.addIssue({ code: 'custom', path: ['cement_mark_id'], message: 'Выберите марку цемента' });
+      if (!data.packaging) ctx.addIssue({ code: 'custom', path: ['packaging'], message: 'Выберите упаковку' });
+    }
+    if (data.vehicle_type === 'OWN' && !data.own_vehicle_id) {
+      ctx.addIssue({ code: 'custom', path: ['own_vehicle_id'], message: 'Выберите машину' });
+    }
+  } else if (!data.machine_number) {
+    ctx.addIssue({ code: 'custom', path: ['machine_number'], message: 'Укажите номер машины' });
+  }
+}

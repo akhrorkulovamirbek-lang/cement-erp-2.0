@@ -5,27 +5,31 @@ import { ApiError } from '@/api/client';
 import {
   cashIncomeHooks,
   cementMarksHooks,
+  clientAdjustmentsHooks,
   clientsHooks,
   incomingHooks,
   salesHooks,
   useClientBalances,
+  useSuggestions,
   zavodyHooks,
 } from '@/api/modules';
 import { Badge } from '@/components/Badge';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable, type Column } from '@/components/DataTable';
 import { MoneyCell } from '@/components/MoneyCell';
 import { MoneyFields } from '@/components/MoneyFields';
 import { PageHeader } from '@/components/PageHeader';
 import { SidePanel } from '@/components/SidePanel';
+import { SuggestInput } from '@/components/SuggestInput';
 import { StatCard } from '@/components/StatCard';
 import { RHFButtonGroup } from '@/components/ButtonGroup';
 import { FormRow, Input, RHFSelect } from '@/components/form';
 import { Button } from '@/components/ui/button';
-import { PACKAGING_LABELS, PACKAGING_OPTIONS, VEHICLE_TYPE_LABELS } from '@/lib/constants';
+import { PACKAGING_LABELS, PACKAGING_OPTIONS } from '@/lib/constants';
 import { downloadClientReport, type ReportRow } from '@/lib/clientReportExcel';
 import { formatDate, formatMoney, formatNumber, todayISO } from '@/lib/format';
 import { useToast } from '@/lib/toast';
-import type { CashIncome, Incoming, Sale } from '@/types';
+import type { CashIncome, ClientDebtAdjustment, Incoming, Sale } from '@/types';
 
 interface PayDebtForm {
   date: string;
@@ -48,6 +52,13 @@ const emptyPayDebtForm = (): PayDebtForm => ({
   payer_name: '',
   extra_amount: '',
 });
+
+interface AdjustmentForm {
+  date: string;
+  direction: 'increase' | 'decrease';
+  amount: string;
+  comment: string;
+}
 
 interface PayGoodsForm {
   date: string;
@@ -81,6 +92,10 @@ export function ClientDetail() {
   const payDebt = cashIncomeHooks.useCreate();
   const goodsPaymentsList = incomingHooks.useList({ client_id: clientId });
   const payGoods = incomingHooks.useCreate();
+  const suggestions = useSuggestions();
+  const adjustments = clientAdjustmentsHooks.useList({ client_id: clientId });
+  const createAdjustment = clientAdjustmentsHooks.useCreate();
+  const deleteAdjustment = clientAdjustmentsHooks.useDelete();
   const zavody = zavodyHooks.useList();
   const cementMarks = cementMarksHooks.useList();
 
@@ -95,6 +110,45 @@ export function ClientDetail() {
   });
   const currencyWatch = watch('currency');
   const splitCurrency = currencyWatch === 'USD' ? 'UZS' : 'USD';
+
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [deletingAdjustment, setDeletingAdjustment] = useState<ClientDebtAdjustment | null>(null);
+  const adjustForm = useForm<AdjustmentForm>({
+    defaultValues: { date: todayISO(), direction: 'increase', amount: '', comment: '' },
+  });
+
+  function openAdjust() {
+    adjustForm.reset({ date: todayISO(), direction: 'increase', amount: '', comment: '' });
+    setAdjustOpen(true);
+  }
+
+  async function onAdjust(data: AdjustmentForm) {
+    const amount = Number(data.amount);
+    try {
+      await createAdjustment.mutateAsync({
+        client_id: clientId,
+        date: data.date,
+        amount: data.direction === 'increase' ? amount : -amount,
+        comment: data.comment,
+      });
+      notify('Долг скорректирован');
+      setAdjustOpen(false);
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : 'Ошибка', 'error');
+    }
+  }
+
+  async function onDeleteAdjustment() {
+    if (!deletingAdjustment) return;
+    try {
+      await deleteAdjustment.mutateAsync(deletingAdjustment.id);
+      notify('Корректировка удалена');
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : 'Ошибка', 'error');
+    } finally {
+      setDeletingAdjustment(null);
+    }
+  }
 
   const [payGoodsOpen, setPayGoodsOpen] = useState(false);
   const goodsForm = useForm<PayGoodsForm>({ defaultValues: emptyPayGoodsForm() });
@@ -171,7 +225,7 @@ export function ClientDetail() {
         packaging: r.packaging ? PACKAGING_LABELS[r.packaging] : '',
         tonnage: Number(r.tonnage),
         price: r.price_per_ton ? Number(r.price_per_ton) : null,
-        vehicle: `${VEHICLE_TYPE_LABELS[r.vehicle_type]}${vehicle ? ': ' + vehicle : ''}`,
+        vehicle,
         freight: r.freight_price_per_ton ? Number(r.freight_price_per_ton) : null,
         charged: Number(r.total_sum),
         paid: null,
@@ -230,6 +284,29 @@ export function ClientDetail() {
         method: 'товаром',
         comment: r.comment ?? '',
         delta: -Number(r.total_sum),
+      });
+    }
+
+    for (const a of adjustments.data ?? []) {
+      const value = Number(a.amount);
+      events.push({
+        kind: 'adjustment',
+        order: a.id,
+        date: a.date,
+        event: value > 0 ? 'Корректировка: долг увеличен' : 'Корректировка: долг уменьшен',
+        zavod: '',
+        mark: '',
+        packaging: '',
+        tonnage: null,
+        price: null,
+        vehicle: '',
+        freight: null,
+        charged: value > 0 ? value : null,
+        paid: value < 0 ? -value : null,
+        payer: '',
+        method: '',
+        comment: a.comment,
+        delta: value,
       });
     }
 
@@ -333,6 +410,23 @@ export function ClientDetail() {
     { key: 'comment', header: 'Комментарий', render: (r) => r.comment || '—' },
   ];
 
+  const adjustmentColumns: Column<ClientDebtAdjustment>[] = [
+    { key: 'date', header: 'Дата', sortValue: (r) => r.date, render: (r) => formatDate(r.date) },
+    {
+      key: 'amount',
+      header: 'Изменение долга',
+      align: 'right',
+      sortValue: (r) => Number(r.amount),
+      render: (r) => (
+        <span className={Number(r.amount) > 0 ? 'font-medium text-destructive' : 'font-medium text-emerald-600'}>
+          {Number(r.amount) > 0 ? '+' : '−'}
+          {formatMoney(Math.abs(Number(r.amount)))}
+        </span>
+      ),
+    },
+    { key: 'comment', header: 'Причина' },
+  ];
+
   const goodsColumns: Column<Incoming>[] = [
     { key: 'date', header: 'Дата', sortValue: (r) => r.date, render: (r) => formatDate(r.date) },
     { key: 'cement_mark_name', header: 'Марка' },
@@ -362,7 +456,10 @@ export function ClientDetail() {
         title={client?.name ?? '...'}
         subtitle={client?.phone ?? undefined}
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={openAdjust}>
+              Корректировка долга
+            </Button>
             <Button variant="outline" onClick={exportToExcel}>
               Скачать в Excel
             </Button>
@@ -415,6 +512,70 @@ export function ClientDetail() {
         emptyMessage="Оплат товаром пока нет"
       />
 
+      <h2 className="mb-2 mt-6 text-sm font-semibold">Корректировки долга</h2>
+      <DataTable
+        columns={adjustmentColumns}
+        rows={adjustments.data ?? []}
+        loading={adjustments.isLoading}
+        getRowId={(r) => r.id}
+        onDelete={setDeletingAdjustment}
+        emptyMessage="Корректировок пока нет"
+      />
+
+      {adjustOpen && (
+        <SidePanel title="Корректировка долга" onClose={() => setAdjustOpen(false)}>
+          <form onSubmit={adjustForm.handleSubmit(onAdjust)} className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Исправляет долг клиента без продажи и оплаты — например, ошибка в старых записях или скидка. Причину укажите обязательно.
+            </p>
+            <FormRow label="Дата">
+              <Input type="date" {...adjustForm.register('date', { required: true })} />
+            </FormRow>
+            <FormRow label="Что сделать с долгом">
+              <RHFButtonGroup
+                control={adjustForm.control}
+                name="direction"
+                options={[
+                  { value: 'increase', label: 'Увеличить долг' },
+                  { value: 'decrease', label: 'Уменьшить долг' },
+                ]}
+              />
+            </FormRow>
+            <FormRow label="Сумма, сум" error={adjustForm.formState.errors.amount?.message}>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                {...adjustForm.register('amount', {
+                  required: 'Укажите сумму',
+                  validate: (v) => Number(v) > 0 || 'Сумма должна быть больше нуля',
+                })}
+              />
+            </FormRow>
+            <FormRow label="Причина" error={adjustForm.formState.errors.comment?.message}>
+              <Input {...adjustForm.register('comment', { required: 'Укажите причину' })} placeholder="Например: скидка / ошибка в записи" />
+            </FormRow>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setAdjustOpen(false)}>
+                Отмена
+              </Button>
+              <Button type="submit" disabled={adjustForm.formState.isSubmitting}>
+                Сохранить
+              </Button>
+            </div>
+          </form>
+        </SidePanel>
+      )}
+
+      {deletingAdjustment && (
+        <ConfirmDialog
+          title="Удалить корректировку?"
+          message="Долг клиента вернётся к значению без этой корректировки."
+          onConfirm={onDeleteAdjustment}
+          onCancel={() => setDeletingAdjustment(null)}
+        />
+      )}
+
       {payOpen && (
         <SidePanel title="Погасить долг" onClose={() => setPayOpen(false)}>
           <form onSubmit={handleSubmit(onPayDebt)} className="space-y-4">
@@ -422,7 +583,7 @@ export function ClientDetail() {
               <Input type="date" {...register('date', { required: true })} />
             </FormRow>
             <FormRow label="Плательщик (необязательно, если платит не сам клиент)">
-              <Input {...register('payer_name')} placeholder="Например, другая фирма" />
+              <SuggestInput {...register('payer_name')} options={suggestions.data?.payers ?? []} placeholder="Например, другая фирма" />
             </FormRow>
             <MoneyFields control={control} register={register} watch={watch} errors={formState.errors} forceShowRate={showSplit} />
             {!showSplit ? (

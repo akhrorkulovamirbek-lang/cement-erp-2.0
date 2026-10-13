@@ -227,8 +227,9 @@ export interface Sale {
   id: number;
   date: string;
   sale_type: SaleType;
-  client_id: number;
-  client_name: string;
+  client_id: number | null;
+  client_name: string | null;
+  is_deferred: boolean;
   source: 'warehouse' | 'ticket' | 'direct' | null;
   zavod_id: number | null;
   zavod_name: string | null;
@@ -276,7 +277,8 @@ export interface CashIncome {
 export interface CashExpense {
   id: number;
   date: string;
-  category: 'цемент' | 'логистика' | 'перевозчик' | 'прочее';
+  category: 'цемент' | 'логистика' | 'перевозчик' | 'прочее' | 'обналичивание' | 'брокер';
+  related_broker_op_id: number | null;
   machine_number: string | null;
   zavod_id: number | null;
   zavod_name: string | null;
@@ -323,11 +325,41 @@ export interface DebtsSummary {
   topCarriers: { name: string; balance: string }[];
 }
 
-export interface CashBalances {
+export interface CashRegister {
   наличка: number;
   карта: number;
   перечисление: number;
   total: number;
+}
+
+export interface CashBalances extends CashRegister {
+  uzs: CashRegister;
+  usd: CashRegister;
+}
+
+export interface ClientDebtAdjustment {
+  id: number;
+  client_id: number;
+  date: string;
+  amount: string;
+  comment: string;
+  created_at: string;
+}
+
+export interface TicketReturnInfo {
+  id: number;
+  date: string;
+  amount: string;
+  description: string | null;
+  ticket_number: string | null;
+}
+
+export interface Suggestions {
+  carriers: string[];
+  plates: string[];
+  payers: string[];
+  expenseTypes: string[];
+  routes: string[];
 }
 
 export interface CementReportRow {

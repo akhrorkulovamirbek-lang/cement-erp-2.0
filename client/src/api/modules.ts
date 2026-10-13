@@ -14,6 +14,9 @@ import type {
   CashIncome,
   CashServiceOperation,
   CashServiceSummary,
+  ClientDebtAdjustment,
+  Suggestions,
+  TicketReturnInfo,
   CementMark,
   CementReportRow,
   Client,
@@ -112,12 +115,42 @@ export function useBrokerAccount() {
   });
 }
 
+// Пополнение брокерского счёта теперь ещё и расход кассы (category='брокер') — обновляем и кассу.
 export function useReplenishBroker() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { date: string; amount: number; description?: string }) =>
-      api.post<BrokerOperation>('/broker-account/replenish', data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['broker-account'] }),
+    mutationFn: (data: {
+      date: string;
+      amount: number;
+      currency: 'UZS' | 'USD';
+      usd_rate?: number | null;
+      payment_type: 'перечисление' | 'наличка' | 'карта';
+      description?: string;
+    }) => api.post<BrokerOperation>('/broker-account/replenish', data),
+    onSuccess: () => {
+      for (const key of ['broker-account', 'cash-expense', ...REPORT_KEYS]) qc.invalidateQueries({ queryKey: [key] });
+    },
+  });
+}
+
+export function useTicketReturns(params: { from?: string; to?: string } = {}) {
+  return useQuery({
+    queryKey: ['ticket-returns', params],
+    queryFn: () => api.get<TicketReturnInfo[]>(`/cash-income/ticket-returns${buildQuery(params)}`),
+  });
+}
+
+export const clientAdjustmentsHooks = createCrudHooks<ClientDebtAdjustment, Record<string, unknown>>(
+  'client-adjustments',
+  '/client-adjustments',
+  REPORT_KEYS,
+);
+
+export function useSuggestions() {
+  return useQuery({
+    queryKey: ['suggestions'],
+    queryFn: () => api.get<Suggestions>('/suggestions'),
+    staleTime: 30_000,
   });
 }
 
@@ -128,6 +161,7 @@ export function useCloseTicket() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tickets'] });
       qc.invalidateQueries({ queryKey: ['broker-account'] });
+      qc.invalidateQueries({ queryKey: ['ticket-returns'] });
       qc.invalidateQueries({ queryKey: ['sales'] });
     },
   });

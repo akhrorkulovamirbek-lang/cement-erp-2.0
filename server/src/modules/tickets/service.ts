@@ -33,7 +33,7 @@ export async function createTicket(client: pg.PoolClient, data: CreateTicketInpu
  * т.к. total_sum теперь включает доставку (раздел 3 ТЗ, формула итога). */
 async function recomputeTicketSales(client: pg.PoolClient, ticketId: number, pricePerTon: number) {
   await client.query(
-    `UPDATE sales SET cost_per_ton = $1, cost_total = $1 * tonnage, margin_total = (price_per_ton * tonnage) - ($1 * tonnage)
+    `UPDATE sales SET cost_per_ton = $1, cost_total = $1 * tonnage, margin_total = CASE WHEN price_per_ton IS NULL THEN 0 ELSE (price_per_ton * tonnage) - ($1 * tonnage) END
      WHERE source = 'ticket' AND ticket_id = $2`,
     [pricePerTon, ticketId],
   );

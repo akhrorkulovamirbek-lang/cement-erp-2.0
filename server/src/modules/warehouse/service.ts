@@ -101,7 +101,7 @@ export async function recomputeWarehouseBalance(
     // margin — только по цементу, без учёта доставки, которая теперь входит в total_sum
     // (раздел 3 ТЗ, формула итога): margin = tonnage*price_per_ton - cost_total, не total_sum - cost_total.
     await client.query(
-      `UPDATE sales SET cost_per_ton = $1, cost_total = $1 * tonnage, margin_total = (price_per_ton * tonnage) - ($1 * tonnage) WHERE id = $2`,
+      `UPDATE sales SET cost_per_ton = $1, cost_total = $1 * tonnage, margin_total = CASE WHEN price_per_ton IS NULL THEN 0 ELSE (price_per_ton * tonnage) - ($1 * tonnage) END WHERE id = $2`,
       [u.costPerTon, u.id],
     );
   }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { ApiError } from '@/api/client';
-import { cementMarksHooks, clientsHooks, machinesHooks, salesHooks, ticketsHooks, useWarehouseBalance, zavodyHooks } from '@/api/modules';
+import { cementMarksHooks, clientsHooks, machinesHooks, salesHooks, ticketsHooks, useSuggestions, useWarehouseBalance, zavodyHooks } from '@/api/modules';
 import { Badge } from '@/components/Badge';
 import { RHFButtonGroup } from '@/components/ButtonGroup';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -10,7 +10,8 @@ import { FilterBar } from '@/components/FilterBar';
 import { PageHeader } from '@/components/PageHeader';
 import { QuickAddClient } from '@/components/QuickAddClient';
 import { SidePanel } from '@/components/SidePanel';
-import { FormRow, Input, PlainSelect, RHFSelect } from '@/components/form';
+import { FormRow, Input, PlainSelect, RHFCheckbox, RHFSelect } from '@/components/form';
+import { SuggestInput } from '@/components/SuggestInput';
 import { Button } from '@/components/ui/button';
 import { PACKAGING_LABELS, SALE_TYPE_OPTIONS, VEHICLE_TYPE_OPTIONS, VEHICLE_TYPE_LABELS } from '@/lib/constants';
 import { formatDate, formatMoney, formatNumber, todayISO } from '@/lib/format';
@@ -19,6 +20,7 @@ import { useToast } from '@/lib/toast';
 import type { Client, Sale } from '@/types';
 
 interface FormValues {
+  is_deferred: boolean;
   sale_type: 'CEMENT' | 'LOGISTICS';
   date: string;
   client_id: string;
@@ -40,6 +42,7 @@ interface FormValues {
 }
 
 const emptyForm = (): FormValues => ({
+  is_deferred: false,
   sale_type: 'CEMENT',
   date: todayISO(),
   client_id: '',
@@ -66,11 +69,13 @@ export function Sales() {
   const [to, setTo] = useState('');
   const [clientFilter, setClientFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [deferredFilter, setDeferredFilter] = useState('');
   const list = salesHooks.useList({
     from: from || undefined,
     to: to || undefined,
     client_id: clientFilter || undefined,
     sale_type: typeFilter || undefined,
+    deferred: deferredFilter || undefined,
   });
   const create = salesHooks.useCreate();
   const update = salesHooks.useUpdate();
@@ -81,6 +86,7 @@ export function Sales() {
   const machines = machinesHooks.useList();
   const tickets = ticketsHooks.useList({ status: 'active' });
   const balance = useWarehouseBalance();
+  const suggestions = useSuggestions();
   // См. комментарий у аналогичного стейта в Incoming.tsx — без этого Radix Select сбрасывает
   // только что выбранного нового клиента обратно в пустое значение.
   const [justAddedClient, setJustAddedClient] = useState<Client | null>(null);
@@ -102,6 +108,7 @@ export function Sales() {
     setTimeout(() => setValue('client_id', String(client.id), { shouldValidate: true }), 250);
   }
 
+  const isDeferred = watch('is_deferred');
   const saleType = watch('sale_type');
   const source = watch('source');
   const vehicleType = watch('vehicle_type');
@@ -139,9 +146,10 @@ export function Sales() {
       return;
     }
     reset({
+      is_deferred: row.is_deferred,
       sale_type: row.sale_type,
       date: row.date,
-      client_id: String(row.client_id),
+      client_id: row.client_id ? String(row.client_id) : '',
       source: row.source === 'ticket' ? 'ticket' : 'warehouse',
       ticket_id: row.ticket_id ? String(row.ticket_id) : '',
       zavod_id: row.zavod_id ? String(row.zavod_id) : '',
@@ -165,13 +173,14 @@ export function Sales() {
     const payload = {
       sale_type: data.sale_type,
       date: data.date,
-      client_id: Number(data.client_id),
+      is_deferred: data.is_deferred,
+      client_id: data.client_id ? Number(data.client_id) : null,
       source: data.sale_type === 'CEMENT' ? data.source : null,
       ticket_id: data.sale_type === 'CEMENT' && data.source === 'ticket' ? Number(data.ticket_id) : null,
       zavod_id: data.sale_type === 'CEMENT' && data.source === 'warehouse' ? Number(data.zavod_id) : null,
       cement_mark_id: data.sale_type === 'CEMENT' && data.source === 'warehouse' ? Number(data.cement_mark_id) : null,
       packaging: data.sale_type === 'CEMENT' && data.source === 'warehouse' ? data.packaging : null,
-      price_per_ton: data.sale_type === 'CEMENT' ? Number(data.price_per_ton) : null,
+      price_per_ton: data.sale_type === 'CEMENT' && data.price_per_ton ? Number(data.price_per_ton) : null,
       tonnage: Number(data.tonnage),
       // Для LOGISTICS сервер определяет своя/наёмная сам по номеру — это значение только чтобы
       // пройти валидацию формы (обязательное поле), сервер его игнорирует для этого типа.
@@ -180,15 +189,16 @@ export function Sales() {
       own_vehicle_id: data.sale_type === 'CEMENT' && data.vehicle_type === 'OWN' ? Number(data.own_vehicle_id) : null,
       machine_number: data.vehicle_type === 'OWN' && data.sale_type === 'CEMENT' ? null : data.machine_number || null,
       carrier_name: data.vehicle_type === 'HIRED' ? data.carrier_name || null : null,
-      freight_price_per_ton: data.sale_type === 'LOGISTICS' || data.vehicle_type !== 'CLIENT' ? Number(data.freight_price_per_ton) : null,
-      hire_price_per_ton: data.vehicle_type === 'HIRED' ? Number(data.hire_price_per_ton) : null,
+      freight_price_per_ton:
+        (data.sale_type === 'LOGISTICS' || data.vehicle_type !== 'CLIENT') && data.freight_price_per_ton ? Number(data.freight_price_per_ton) : null,
+      hire_price_per_ton: data.vehicle_type === 'HIRED' && data.hire_price_per_ton ? Number(data.hire_price_per_ton) : null,
       route: data.sale_type === 'LOGISTICS' ? data.route || null : null,
       comment: data.comment || null,
     };
     try {
       if (editing === 'new') {
         await create.mutateAsync(payload);
-        notify('Продажа добавлена');
+        notify(data.is_deferred ? 'Продажа отложена — клиента и цену можно внести позже' : 'Продажа добавлена');
       } else if (editing) {
         await update.mutateAsync({ id: editing.id, data: payload });
         notify('Сохранено');
@@ -222,7 +232,11 @@ export function Sales() {
       header: 'Тип',
       render: (r) => (r.sale_type === 'CEMENT' ? <Badge tone="slate">Цемент</Badge> : <Badge tone="blue">Логистика</Badge>),
     },
-    { key: 'client_name', header: 'Клиент' },
+    {
+      key: 'client_name',
+      header: 'Клиент',
+      render: (r) => (r.client_name ? r.client_name : <Badge tone="amber">Отложена — клиент не указан</Badge>),
+    },
     { key: 'cement_mark_name', header: 'Марка', render: (r) => r.cement_mark_name ?? '—' },
     {
       key: 'tonnage',
@@ -236,7 +250,7 @@ export function Sales() {
       header: 'Сумма',
       align: 'right',
       sortValue: (r) => Number(r.total_sum),
-      render: (r) => formatMoney(r.total_sum),
+      render: (r) => (r.is_deferred && Number(r.total_sum) === 0 ? '—' : formatMoney(r.total_sum)),
     },
     {
       key: 'margin_total',
@@ -284,6 +298,16 @@ export function Sales() {
           placeholder="Все типы"
           options={[{ value: '', label: 'Все типы' }, ...SALE_TYPE_OPTIONS]}
         />
+        <PlainSelect
+          value={deferredFilter}
+          onValueChange={setDeferredFilter}
+          className="w-48"
+          placeholder="Все продажи"
+          options={[
+            { value: '', label: 'Все продажи' },
+            { value: '1', label: 'Только отложенные' },
+          ]}
+        />
       </FilterBar>
 
       <DataTable columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} onEdit={openEdit} onDelete={(r) => (r.source === 'direct' ? notify('Эта продажа связана с приходом «Напрямую» — удалите её через Приход', 'error') : setDeleting(r))} />
@@ -295,11 +319,20 @@ export function Sales() {
               <RHFButtonGroup control={control} name="sale_type" options={SALE_TYPE_OPTIONS} disabled={editing !== 'new'} />
             </FormRow>
 
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-3">
+              <RHFCheckbox control={control} name="is_deferred" label="Отложить: клиента и цену внесу позже" />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {isDeferred
+                  ? 'Цемент и машина записываются сейчас (остаток склада/тикета уменьшится). Клиента и цены заполните позже: откройте продажу, внесите данные и снимите эту галочку.'
+                  : 'Если клиент или цена пока неизвестны — отметьте, и продажа сохранится как отложенная.'}
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <FormRow label="Дата">
                 <Input type="date" {...register('date', { required: true })} />
               </FormRow>
-              <FormRow label="Клиент" error={formState.errors.client_id?.message}>
+              <FormRow label={isDeferred ? 'Клиент (необязательно)' : 'Клиент'} error={formState.errors.client_id?.message}>
                 <RHFSelect control={control} name="client_id" options={clientOptions} />
               </FormRow>
             </div>
@@ -325,12 +358,12 @@ export function Sales() {
                       name="ticket_id"
                       options={(tickets.data ?? []).map((t) => ({
                         value: String(t.id),
-                        label: `${t.ticket_number} · ${t.zavod_name} · ${t.cement_mark_name} · ${PACKAGING_LABELS[t.packaging]} · остаток ${formatNumber(t.remaining_tonnage, 3)} т`,
+                        label: `${t.ticket_number} · ${t.zavod_name} · ${t.cement_mark_name} · ${PACKAGING_LABELS[t.packaging]} · остаток ${formatNumber(t.remaining_tonnage, 3)} т · цена покупки ${formatMoney(t.price_per_ton)}/т`,
                       }))}
                     />
                     {selectedTicket && (
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Завод/марка/упаковка зафиксированы тикетом: {selectedTicket.zavod_name}, {selectedTicket.cement_mark_name}, {PACKAGING_LABELS[selectedTicket.packaging]}
+                        Завод/марка/упаковка зафиксированы тикетом: {selectedTicket.zavod_name}, {selectedTicket.cement_mark_name}, {PACKAGING_LABELS[selectedTicket.packaging]}. Цена покупки: {formatMoney(selectedTicket.price_per_ton)} за тонну
                       </p>
                     )}
                   </FormRow>
@@ -364,7 +397,7 @@ export function Sales() {
                     <Input type="number" step="0.001" {...register('tonnage', { required: 'Укажите тоннаж' })} />
                   </FormRow>
                   <FormRow label="Цена за тонну" error={formState.errors.price_per_ton?.message}>
-                    <Input type="number" step="0.01" {...register('price_per_ton', { required: 'Укажите цену' })} />
+                    <Input type="number" step="0.01" {...register('price_per_ton', { required: isDeferred ? false : 'Укажите цену' })} />
                   </FormRow>
                 </div>
                 {source === 'warehouse' && currentBalance && (
@@ -376,7 +409,7 @@ export function Sales() {
                 </FormRow>
                 {vehicleType === 'CLIENT' && (
                   <FormRow label="Номер машины" error={formState.errors.machine_number?.message}>
-                    <Input {...register('machine_number', { required: 'Укажите номер машины' })} />
+                    <SuggestInput options={suggestions.data?.plates ?? []} {...register('machine_number', { required: 'Укажите номер машины' })} />
                   </FormRow>
                 )}
                 {vehicleType === 'OWN' && (
@@ -392,10 +425,10 @@ export function Sales() {
                 {vehicleType === 'HIRED' && (
                   <>
                     <FormRow label="Номер машины" error={formState.errors.machine_number?.message}>
-                      <Input {...register('machine_number', { required: 'Укажите номер машины' })} />
+                      <SuggestInput options={suggestions.data?.plates ?? []} {...register('machine_number', { required: 'Укажите номер машины' })} />
                     </FormRow>
                     <FormRow label="Перевозчик" error={formState.errors.carrier_name?.message}>
-                      <Input {...register('carrier_name', { required: 'Укажите перевозчика' })} />
+                      <SuggestInput options={suggestions.data?.carriers ?? []} {...register('carrier_name', { required: 'Укажите перевозчика' })} />
                     </FormRow>
                     <FormRow label="Цена перевозки за тонну (клиенту)" error={formState.errors.freight_price_per_ton?.message}>
                       <Input type="number" step="0.01" {...register('freight_price_per_ton')} />
@@ -409,30 +442,30 @@ export function Sales() {
             ) : (
               <>
                 <FormRow label="Номер машины" error={formState.errors.machine_number?.message}>
-                  <Input {...register('machine_number', { required: 'Укажите номер машины' })} placeholder="Определится: своя или наёмная" />
+                  <SuggestInput options={suggestions.data?.plates ?? []} {...register('machine_number', { required: 'Укажите номер машины' })} placeholder="Определится: своя или наёмная" />
                 </FormRow>
                 <p className="-mt-2 text-xs text-muted-foreground">
                   {machineNumber ? (logisticsVehicleGuess === 'OWN' ? 'Своя машина (найдена в справочнике)' : 'Наёмная (номера нет в справочнике «Свои машины»)') : 'Введите номер — тип определится сам'}
                 </p>
                 {vehicleType === 'HIRED' && (
                   <FormRow label="Перевозчик" error={formState.errors.carrier_name?.message}>
-                    <Input {...register('carrier_name', { required: 'Укажите перевозчика' })} />
+                    <SuggestInput options={suggestions.data?.carriers ?? []} {...register('carrier_name', { required: 'Укажите перевозчика' })} />
                   </FormRow>
                 )}
                 <FormRow label="Маршрут (необязательно)">
-                  <Input {...register('route')} placeholder="Откуда — куда" />
+                  <SuggestInput {...register('route')} options={suggestions.data?.routes ?? []} placeholder="Откуда — куда" />
                 </FormRow>
                 <div className="grid grid-cols-2 gap-3">
                   <FormRow label="Тоннаж" error={formState.errors.tonnage?.message}>
                     <Input type="number" step="0.001" {...register('tonnage', { required: 'Укажите тоннаж' })} />
                   </FormRow>
                   <FormRow label="Цена за тонну перевозки" error={formState.errors.freight_price_per_ton?.message}>
-                    <Input type="number" step="0.01" {...register('freight_price_per_ton', { required: 'Укажите цену' })} />
+                    <Input type="number" step="0.01" {...register('freight_price_per_ton', { required: isDeferred ? false : 'Укажите цену' })} />
                   </FormRow>
                 </div>
                 {vehicleType === 'HIRED' && (
                   <FormRow label="Цена найма за тонну (перевозчику)" error={formState.errors.hire_price_per_ton?.message}>
-                    <Input type="number" step="0.01" {...register('hire_price_per_ton', { required: 'Укажите цену найма' })} />
+                    <Input type="number" step="0.01" {...register('hire_price_per_ton', { required: isDeferred ? false : 'Укажите цену найма' })} />
                   </FormRow>
                 )}
               </>

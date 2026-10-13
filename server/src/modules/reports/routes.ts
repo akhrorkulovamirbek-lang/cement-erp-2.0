@@ -21,8 +21,12 @@ const CLIENT_PAID_SUBQUERY = `
     SELECT client_id, (${UZS_INCOME}) AS amount_uzs FROM cash_income WHERE client_id IS NOT NULL
     UNION ALL
     SELECT client_id, total_sum AS amount_uzs FROM incoming WHERE warehouse = 'CLIENT_GOODS' AND client_id IS NOT NULL
+    UNION ALL
+    SELECT client_id, -amount AS amount_uzs FROM client_debt_adjustments WHERE amount < 0
   ) t GROUP BY client_id
 `;
+// Корректировка долга клиента: положительная увеличивает «куплено», отрицательная уходит в «оплачено».
+const CLIENT_ADJ_PLUS_SUBQUERY = `SELECT client_id, SUM(amount) AS total FROM client_debt_adjustments WHERE amount > 0 GROUP BY client_id`;
 const ZAVOD_PURCHASED_EXCLUDE_CLIENT_GOODS = `warehouse <> 'CLIENT_GOODS'`;
 
 reportsRouter.get(
@@ -90,13 +94,14 @@ reportsRouter.get(
   asyncHandler(async (_req, res) => {
     const { rows } = await pool.query(
       `SELECT c.id, c.name, c.phone,
-              c.initial_debt + COALESCE(sales_total.total, 0) AS purchased,
+              c.initial_debt + COALESCE(sales_total.total, 0) + COALESCE(adj_plus.total, 0) AS purchased,
               COALESCE(paid_total.total, 0) AS paid,
-              c.initial_debt + COALESCE(sales_total.total, 0) - COALESCE(paid_total.total, 0) AS balance
+              c.initial_debt + COALESCE(sales_total.total, 0) + COALESCE(adj_plus.total, 0) - COALESCE(paid_total.total, 0) AS balance
        FROM clients c
        LEFT JOIN (
-         SELECT client_id, SUM(${UZS_SALE}) AS total FROM sales s GROUP BY client_id
+         SELECT client_id, SUM(${UZS_SALE}) AS total FROM sales s WHERE client_id IS NOT NULL GROUP BY client_id
        ) sales_total ON sales_total.client_id = c.id
+       LEFT JOIN (${CLIENT_ADJ_PLUS_SUBQUERY}) adj_plus ON adj_plus.client_id = c.id
        LEFT JOIN (${CLIENT_PAID_SUBQUERY}) paid_total ON paid_total.client_id = c.id
        ORDER BY balance DESC`,
     );
@@ -132,11 +137,12 @@ reportsRouter.get(
   asyncHandler(async (_req, res) => {
     const [clients, zavody, carriers] = await Promise.all([
       pool.query(
-        `SELECT c.id, c.name, c.initial_debt + COALESCE(s.total, 0) - COALESCE(p.total, 0) AS balance
+        `SELECT c.id, c.name, c.initial_debt + COALESCE(s.total, 0) + COALESCE(a.total, 0) - COALESCE(p.total, 0) AS balance
          FROM clients c
-         LEFT JOIN (SELECT client_id, SUM(${UZS_SALE}) AS total FROM sales s GROUP BY client_id) s ON s.client_id = c.id
+         LEFT JOIN (SELECT client_id, SUM(${UZS_SALE}) AS total FROM sales s WHERE client_id IS NOT NULL GROUP BY client_id) s ON s.client_id = c.id
+         LEFT JOIN (${CLIENT_ADJ_PLUS_SUBQUERY}) a ON a.client_id = c.id
          LEFT JOIN (${CLIENT_PAID_SUBQUERY}) p ON p.client_id = c.id
-         WHERE c.initial_debt + COALESCE(s.total, 0) - COALESCE(p.total, 0) > 0
+         WHERE c.initial_debt + COALESCE(s.total, 0) + COALESCE(a.total, 0) - COALESCE(p.total, 0) > 0
          ORDER BY balance DESC`,
       ),
       pool.query(
@@ -278,7 +284,9 @@ reportsRouter.get(
   }),
 );
 
-// Раздел 4 ТЗ: остатки по Наличным/Карте/Переводу вверху Кассы.
+// Раздел 4 ТЗ: остатки по Наличным/Карте/Переводу вверху Кассы. Основные поля — всё в сумах (как
+// раньше, доллары конвертируются по курсу операции); uzs/usd — отдельные кассы: в каждой только
+// деньги своей валюты, без пересчёта (доллары в долларах).
 reportsRouter.get(
   '/cash-balances',
   asyncHandler(async (_req, res) => {
@@ -293,11 +301,31 @@ reportsRouter.get(
        GROUP BY payment_type`,
     );
     const byType = Object.fromEntries(rows.map((r) => [r.payment_type, Number(r.balance)]));
+
+    const { rows: legs } = await pool.query(
+      `SELECT payment_type, currency, COALESCE(SUM(signed), 0) AS balance FROM (
+         SELECT payment_type, currency, amount AS signed FROM cash_income
+         UNION ALL
+         SELECT payment_type, CASE WHEN currency = 'USD' THEN 'UZS' ELSE 'USD' END AS currency, extra_amount AS signed
+           FROM cash_income WHERE extra_amount IS NOT NULL
+         UNION ALL
+         SELECT payment_type, currency, -amount AS signed FROM cash_expense
+       ) t GROUP BY payment_type, currency`,
+    );
+    const register = (cur: 'UZS' | 'USD') => {
+      const m = Object.fromEntries(legs.filter((l) => l.currency === cur).map((l) => [l.payment_type, Number(l.balance)]));
+      const out = { наличка: m['наличка'] ?? 0, карта: m['карта'] ?? 0, перечисление: m['перечисление'] ?? 0, total: 0 };
+      out.total = out.наличка + out.карта + out.перечисление;
+      return out;
+    };
+
     res.json({
       наличка: byType['наличка'] ?? 0,
       карта: byType['карта'] ?? 0,
       перечисление: byType['перечисление'] ?? 0,
       total: Object.values(byType).reduce((s: number, v) => s + (v as number), 0),
+      uzs: register('UZS'),
+      usd: register('USD'),
     });
   }),
 );

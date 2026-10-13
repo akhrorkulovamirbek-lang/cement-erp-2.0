@@ -1,4 +1,4 @@
-export type ReportKind = 'opening' | 'sale' | 'payment' | 'goods';
+export type ReportKind = 'opening' | 'sale' | 'payment' | 'goods' | 'adjustment';
 
 export interface ReportRow {
   kind: ReportKind;
@@ -42,6 +42,7 @@ const FILL: Record<ReportKind, string> = {
   sale: 'FFFFF4E0',
   payment: 'FFE6F4EA',
   goods: 'FFE3F0FB',
+  adjustment: 'FFF3E8FF',
 };
 
 function formatShortDate(iso: string): string {
@@ -174,6 +175,7 @@ export async function downloadClientReport(params: {
     ['Покупка', 'sale'],
     ['Оплата деньгами', 'payment'],
     ['Оплата товаром', 'goods'],
+    ['Корректировка долга', 'adjustment'],
   ];
   legend.forEach(([label, kind], i) => {
     const cell = ws.getCell(legendRow, 1 + i * 2);

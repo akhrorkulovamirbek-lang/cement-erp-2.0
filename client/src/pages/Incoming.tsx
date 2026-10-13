@@ -11,6 +11,7 @@ import {
   useBrokerAccount,
   useCloseTicket,
   useReplenishBroker,
+  useSuggestions,
   useWarehouseBalance,
   zavodyHooks,
 } from '@/api/modules';
@@ -19,7 +20,9 @@ import { ButtonGroup, RHFButtonGroup } from '@/components/ButtonGroup';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable, type Column } from '@/components/DataTable';
 import { FilterBar } from '@/components/FilterBar';
+import { MoneyFields } from '@/components/MoneyFields';
 import { PageHeader } from '@/components/PageHeader';
+import { SuggestInput } from '@/components/SuggestInput';
 import { QuickAddClient } from '@/components/QuickAddClient';
 import { SidePanel } from '@/components/SidePanel';
 import { FormRow, Input, PlainSelect, RHFSelect } from '@/components/form';
@@ -87,6 +90,15 @@ const emptyTicketForm = (): TicketFormValues => ({
   tonnage: '',
   price_per_ton: '',
 });
+
+interface ReplenishForm {
+  date: string;
+  amount: string;
+  currency: 'UZS' | 'USD';
+  usd_rate: string;
+  payment_type: 'перечисление' | 'наличка' | 'карта';
+  description: string;
+}
 
 export function IncomingPage() {
   const { notify } = useToast();
@@ -261,6 +273,7 @@ export function IncomingPage() {
   // --- Брокерский счёт и тикеты (объединено с бывшей страницей «Биржа») ---
   const broker = useBrokerAccount();
   const replenish = useReplenishBroker();
+  const suggestions = useSuggestions();
   const tickets = ticketsHooks.useList();
   const updateTicket = ticketsHooks.useUpdate();
   const deleteTicket = ticketsHooks.useDelete();
@@ -271,16 +284,29 @@ export function IncomingPage() {
   const [deletingTicket, setDeletingTicket] = useState<Ticket | null>(null);
   const [closingTicket, setClosingTicket] = useState<Ticket | null>(null);
   const [showHistory, setShowHistory] = useState(false);
-  const replenishForm = useForm<{ date: string; amount: string; description: string }>({
-    defaultValues: { date: todayISO(), amount: '', description: '' },
+  const emptyReplenish = (): ReplenishForm => ({
+    date: todayISO(),
+    amount: '',
+    currency: 'UZS',
+    usd_rate: '',
+    payment_type: 'перечисление',
+    description: '',
   });
+  const replenishForm = useForm<ReplenishForm>({ defaultValues: emptyReplenish() });
 
-  async function onReplenish(data: { date: string; amount: string; description: string }) {
+  async function onReplenish(data: ReplenishForm) {
     try {
-      await replenish.mutateAsync({ date: data.date, amount: Number(data.amount), description: data.description || undefined });
-      notify('Счёт пополнен');
+      await replenish.mutateAsync({
+        date: data.date,
+        amount: Number(data.amount),
+        currency: data.currency,
+        usd_rate: data.currency === 'USD' ? Number(data.usd_rate) : null,
+        payment_type: data.payment_type,
+        description: data.description || undefined,
+      });
+      notify('Счёт пополнен, расход записан в кассу');
       setShowReplenish(false);
-      replenishForm.reset({ date: todayISO(), amount: '', description: '' });
+      replenishForm.reset(emptyReplenish());
     } catch (err) {
       notify(err instanceof ApiError ? err.message : 'Ошибка', 'error');
     }
@@ -593,7 +619,7 @@ export function IncomingPage() {
                 </FormRow>
               </div>
               <FormRow label="Номер машины (необязательно)">
-                <Input {...register('machine_number')} />
+                <SuggestInput {...register('machine_number')} options={suggestions.data?.plates ?? []} />
               </FormRow>
 
               {warehouse === 'CLIENT_GOODS' && (
@@ -650,7 +676,7 @@ export function IncomingPage() {
                         <Input {...register('sale_machine_number')} />
                       </FormRow>
                       <FormRow label="Перевозчик" error={formState.errors.carrier_name?.message}>
-                        <Input {...register('carrier_name')} />
+                        <SuggestInput {...register('carrier_name')} options={suggestions.data?.carriers ?? []} />
                       </FormRow>
                       <FormRow label="Цена перевозки за тонну (клиенту)" error={formState.errors.freight_price_per_ton?.message}>
                         <Input type="number" step="0.01" {...register('freight_price_per_ton')} />
@@ -739,9 +765,15 @@ export function IncomingPage() {
             <FormRow label="Дата">
               <Input type="date" {...replenishForm.register('date', { required: true })} />
             </FormRow>
-            <FormRow label="Сумма, сум" error={replenishForm.formState.errors.amount?.message}>
-              <Input type="number" step="0.01" {...replenishForm.register('amount', { required: 'Укажите сумму' })} />
-            </FormRow>
+            <MoneyFields
+              control={replenishForm.control}
+              register={replenishForm.register}
+              watch={replenishForm.watch}
+              errors={replenishForm.formState.errors}
+            />
+            <p className="-mt-2 text-xs text-muted-foreground">
+              Деньги уйдут из кассы (выбранным способом оплаты) и появятся на брокерском счёте в сумах. В Кассе это отразится расходом.
+            </p>
             <FormRow label="Комментарий (необязательно)">
               <Input {...replenishForm.register('description')} />
             </FormRow>

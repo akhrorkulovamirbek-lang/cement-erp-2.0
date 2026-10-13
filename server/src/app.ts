@@ -9,6 +9,7 @@ import { bankAccountsRouter } from './modules/bankAccounts/routes.js';
 import { brokerRouter } from './modules/broker/routes.js';
 import { cashExpenseRouter, cashIncomeRouter } from './modules/cash/routes.js';
 import { cashServiceRouter } from './modules/cashService/routes.js';
+import { clientAdjustmentsRouter } from './modules/clientAdjustments/routes.js';
 import { cementMarksRouter } from './modules/cementMarks/routes.js';
 import { clientsRouter } from './modules/clients/routes.js';
 import { logisticsExpenseCategoriesRouter } from './modules/expenseCategories/routes.js';
@@ -19,6 +20,7 @@ import { reportsRouter } from './modules/reports/routes.js';
 import { salesRouter } from './modules/sales/routes.js';
 import { myAccessRouter } from './modules/settings/publicRoutes.js';
 import { settingsRouter } from './modules/settings/routes.js';
+import { suggestionsRouter } from './modules/suggestions/routes.js';
 import { ticketsRouter } from './modules/tickets/routes.js';
 import { usersRouter } from './modules/users/routes.js';
 import { warehouseRouter } from './modules/warehouse/routes.js';
@@ -82,6 +84,13 @@ export function createApp() {
     auditResource('cash_service_operation', { table: 'cash_service_operations', label: 'Обналичивание' }),
     cashServiceRouter,
   );
+  app.use(
+    '/api/client-adjustments',
+    requireAnyPermission('cash', 'sales'),
+    auditResource('client_adjustment', { table: 'client_debt_adjustments', label: 'Корректировка долга клиента' }),
+    clientAdjustmentsRouter,
+  );
+  app.use('/api/suggestions', requireAnyPermission('sales', 'cash', 'incoming'), suggestionsRouter);
   app.use('/api/report', requirePermission('reports'), reportsRouter);
 
   // Ядро

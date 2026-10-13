@@ -118,20 +118,21 @@ export async function createSale(client: pg.PoolClient, data: SaleInput) {
   let cement: CementSource | null = null;
   if (data.sale_type === 'CEMENT') cement = await resolveCementSource(client, data);
 
-  const pricePerTon = data.sale_type === 'CEMENT' ? data.price_per_ton! : null;
-  const totalSum = data.sale_type === 'CEMENT' ? data.tonnage * pricePerTon! + freightTotal : freightTotal;
+  // Отложка: цена может быть не указана — тогда сумма и маржа считаются нулём, пока продажу не завершат.
+  const pricePerTon = data.sale_type === 'CEMENT' ? (data.price_per_ton ?? null) : null;
+  const totalSum = data.sale_type === 'CEMENT' ? data.tonnage * (pricePerTon ?? 0) + freightTotal : freightTotal;
   const costTotal = cement ? cement.costPerTon * data.tonnage : 0;
-  const marginTotal = cement ? data.tonnage * pricePerTon! - costTotal : 0;
+  const marginTotal = cement && pricePerTon !== null ? data.tonnage * pricePerTon - costTotal : 0;
 
   const { rows: saleRows } = await client.query(
     `INSERT INTO sales (date, sale_type, client_id, source, zavod_id, cement_mark_id, packaging, ticket_id,
         tonnage, price_per_ton, cost_per_ton, cost_total, margin_total, vehicle_type, own_vehicle_id, machine_number,
-        carrier_name, freight_price_per_ton, hire_price_per_ton, route, total_sum, comment)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *`,
+        carrier_name, freight_price_per_ton, hire_price_per_ton, route, total_sum, comment, is_deferred)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING *`,
     [
       data.date,
       data.sale_type,
-      data.client_id,
+      data.client_id ?? null,
       data.sale_type === 'CEMENT' ? data.source : null,
       cement?.zavodId ?? null,
       cement?.cementMarkId ?? null,
@@ -151,6 +152,7 @@ export async function createSale(client: pg.PoolClient, data: SaleInput) {
       data.sale_type === 'LOGISTICS' ? (data.route ?? null) : null,
       totalSum,
       data.comment ?? null,
+      data.is_deferred,
     ],
   );
   const sale = saleRows[0];
@@ -189,20 +191,21 @@ export async function updateSale(client: pg.PoolClient, id: number, data: SaleIn
   let cement: CementSource | null = null;
   if (data.sale_type === 'CEMENT') cement = await resolveCementSource(client, data);
 
-  const pricePerTon = data.sale_type === 'CEMENT' ? data.price_per_ton! : null;
-  const totalSum = data.sale_type === 'CEMENT' ? data.tonnage * pricePerTon! + freightTotal : freightTotal;
+  // Отложка: цена может быть не указана — тогда сумма и маржа считаются нулём, пока продажу не завершат.
+  const pricePerTon = data.sale_type === 'CEMENT' ? (data.price_per_ton ?? null) : null;
+  const totalSum = data.sale_type === 'CEMENT' ? data.tonnage * (pricePerTon ?? 0) + freightTotal : freightTotal;
   const costTotal = cement ? cement.costPerTon * data.tonnage : 0;
-  const marginTotal = cement ? data.tonnage * pricePerTon! - costTotal : 0;
+  const marginTotal = cement && pricePerTon !== null ? data.tonnage * pricePerTon - costTotal : 0;
 
   await client.query(
     `UPDATE sales SET date=$1, client_id=$2, source=$3, zavod_id=$4, cement_mark_id=$5, packaging=$6, ticket_id=$7,
        tonnage=$8, price_per_ton=$9, cost_per_ton=$10, cost_total=$11, margin_total=$12, vehicle_type=$13,
        own_vehicle_id=$14, machine_number=$15, carrier_name=$16, freight_price_per_ton=$17, hire_price_per_ton=$18,
-       route=$19, total_sum=$20, comment=$21
-     WHERE id=$22`,
+       route=$19, total_sum=$20, comment=$21, is_deferred=$22
+     WHERE id=$23`,
     [
       data.date,
-      data.client_id,
+      data.client_id ?? null,
       data.sale_type === 'CEMENT' ? data.source : null,
       cement?.zavodId ?? null,
       cement?.cementMarkId ?? null,
@@ -222,6 +225,7 @@ export async function updateSale(client: pg.PoolClient, id: number, data: SaleIn
       data.sale_type === 'LOGISTICS' ? (data.route ?? null) : null,
       totalSum,
       data.comment ?? null,
+      data.is_deferred,
       id,
     ],
   );
