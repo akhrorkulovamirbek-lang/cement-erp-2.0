@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { QuickPeriods } from './QuickPeriods';
 
 interface FilterBarProps {
   from: string;
@@ -24,7 +25,9 @@ export function FilterBar({
   children,
 }: FilterBarProps) {
   return (
-    <div className="mb-3 grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
+    <div className="mb-3 space-y-2">
+    <QuickPeriods from={from} to={to} onChange={(f, t) => { onFromChange(f); onToChange(t); }} />
+    <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
       <Input type="date" value={from} onChange={(e) => onFromChange(e.target.value)} className="w-full sm:w-40" />
       <span className="hidden text-muted-foreground sm:inline">—</span>
       <Input type="date" value={to} onChange={(e) => onToChange(e.target.value)} className="w-full sm:w-40" />
@@ -50,6 +53,7 @@ export function FilterBar({
           Сбросить
         </Button>
       )}
+    </div>
     </div>
   );
 }

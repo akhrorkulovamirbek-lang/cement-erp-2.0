@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useCashBalances, useDebtsSummary, useReportSummary } from '@/api/modules';
 import { PageHeader } from '@/components/PageHeader';
+import { QuickPeriods } from '@/components/QuickPeriods';
 import { StatCard } from '@/components/StatCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -35,6 +36,8 @@ export function Dashboard() {
           </div>
         }
       />
+
+      <QuickPeriods className="mb-4" from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Наличные" value={formatMoney(cashBalances.data?.наличка ?? 0)} />
