@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { pool } from '../db/pool.js';
+import { currentOrgId } from '../db/tenant.js';
 
 export interface AuditParams {
   userId: number | null;
@@ -15,6 +16,8 @@ export interface AuditParams {
 /** Раздел 8.4 ТЗ: каждое действие учитывается. Никогда не должен ронять основной запрос —
  * пишем best-effort и логируем сбой в консоль. */
 export async function recordAudit(params: AuditParams): Promise<void> {
+  // Журнал ведётся внутри организации; вне её (владелец платформы, вход с неизвестным логином) писать некуда.
+  if (currentOrgId() == null) return;
   try {
     await pool.query(
       `INSERT INTO audit_log (user_id, action, object_type, object_id, object_label, before, after, ip, user_agent)

@@ -1,5 +1,6 @@
 import {
   Banknote,
+  Building2,
   ChartBar,
   History,
   LayoutDashboard,
@@ -55,18 +56,20 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 export function AppLayout() {
-  const { username, fullName, role, logout } = useAuth();
+  const { username, fullName, role, logout, isPlatformAdmin, organizationName } = useAuth();
   const { pathname } = useLocation();
   const permissions = useMyPermissions();
 
-  const visibleItems = NAV_ITEMS.filter((item) => !item.resource || permissions.data?.resources[item.resource]);
+  const visibleItems: NavItem[] = isPlatformAdmin
+    ? [{ to: '/organizations', label: 'Организации', icon: Building2 }]
+    : NAV_ITEMS.filter((item) => !item.resource || permissions.data?.resources[item.resource]);
 
   return (
     <SidebarProvider>
       <Sidebar>
         <SidebarHeader className="px-3 py-4">
           <div className="text-base font-semibold">Cement ERP</div>
-          <div className="text-xs text-muted-foreground">Дилер цемента</div>
+          <div className="text-xs text-muted-foreground">{isPlatformAdmin ? 'Владелец платформы' : (organizationName ?? 'Дилер цемента')}</div>
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
@@ -92,7 +95,7 @@ export function AppLayout() {
         <SidebarFooter>
           <div className="px-2 pb-1">
             <div className="text-sm font-medium">{fullName ?? username}</div>
-            <div className="text-xs text-muted-foreground">{role ? ROLE_LABELS[role] : ''}</div>
+            <div className="text-xs text-muted-foreground">{isPlatformAdmin ? 'Владелец платформы' : role ? ROLE_LABELS[role] : ''}</div>
           </div>
           <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => logout()}>
             <LogOut />
@@ -103,7 +106,7 @@ export function AppLayout() {
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger />
-          <span className="text-sm font-semibold md:hidden">Cement ERP</span>
+          <span className="text-sm font-semibold md:hidden">{organizationName ?? 'Cement ERP'}</span>
         </header>
         <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
           <div className="mx-auto max-w-7xl p-4 sm:p-6">

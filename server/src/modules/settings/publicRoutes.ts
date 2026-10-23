@@ -10,6 +10,10 @@ export const myAccessRouter = Router();
 
 myAccessRouter.get('/permissions', (req, res) => {
   const role = req.user!.role;
+  if (req.user!.orgId == null) {
+    res.json({ role, resources: Object.fromEntries(RESOURCE_CODES.map((r) => [r, false])) });
+    return;
+  }
   const resources = Object.fromEntries(RESOURCE_CODES.map((r) => [r, hasPermission(role, r)]));
   res.json({ role, resources });
 });

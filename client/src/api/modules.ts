@@ -345,3 +345,38 @@ export function useClearAllData() {
     onSuccess: () => qc.invalidateQueries(),
   });
 }
+
+// Владелец платформы: реестр организаций.
+export interface OrganizationRow {
+  id: number;
+  name: string;
+  active: boolean;
+  created_at: string;
+  users_count: number;
+  admins: string | null;
+}
+
+export function useOrganizations() {
+  return useQuery({
+    queryKey: ['organizations'],
+    queryFn: () => api.get<OrganizationRow[]>('/platform/organizations'),
+  });
+}
+
+export function useCreateOrganization() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; adminUsername: string; adminPassword: string; adminFullName?: string }) =>
+      api.post<{ id: number; name: string }>('/platform/organizations', data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['organizations'] }),
+  });
+}
+
+export function useUpdateOrganization() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number; name?: string; active?: boolean }) =>
+      api.put<{ id: number; name: string; active: boolean }>(`/platform/organizations/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['organizations'] }),
+  });
+}

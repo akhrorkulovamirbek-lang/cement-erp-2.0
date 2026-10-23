@@ -1,14 +1,17 @@
 import { pool } from '../db/pool.js';
+import { currentOrgId } from '../db/tenant.js';
 import { DEFAULT_PERMISSIONS, RESOURCE_CODES, ROLES, type ResourceCode, type Role } from './constants.js';
 import { MODULE_REGISTRY } from './moduleRegistry.js';
 
-/** In-memory mirror of permissions/module_settings/app_settings, reloaded on every write from the
- * Settings screen. Avoids a DB round-trip on every single authenticated request. Fine at the
- * project's declared scale (≤20 concurrent users) — a multi-instance deployment would need this
- * invalidated via pub/sub instead, not a concern here (single Render web service). */
-let permissions: Record<Role, Set<ResourceCode>> = buildDefaultPermissions();
-let moduleEnabled: Record<string, boolean> = {};
-let appSettings: Record<string, string> = {};
+/** In-memory mirror of permissions/module_settings/app_settings организации, перезагружается при каждой
+ * записи из экрана Настроек — чтобы не ходить в БД на каждый запрос. Кэш свой у каждой организации. */
+interface OrgSettings {
+  permissions: Record<Role, Set<ResourceCode>>;
+  moduleEnabled: Record<string, boolean>;
+  appSettings: Record<string, string>;
+}
+
+const cache = new Map<number, OrgSettings>();
 
 function buildDefaultPermissions(): Record<Role, Set<ResourceCode>> {
   const result = {} as Record<Role, Set<ResourceCode>>;
@@ -16,7 +19,19 @@ function buildDefaultPermissions(): Record<Role, Set<ResourceCode>> {
   return result;
 }
 
+function defaults(): OrgSettings {
+  return { permissions: buildDefaultPermissions(), moduleEnabled: {}, appSettings: {} };
+}
+
+function settingsFor(orgId?: number | null): OrgSettings {
+  const id = orgId ?? currentOrgId();
+  return (id != null ? cache.get(id) : undefined) ?? defaults();
+}
+
+/** Грузит настройки организации из текущего контекста (запрос или runInTenant). */
 export async function loadSettingsCache(): Promise<void> {
+  const orgId = currentOrgId();
+  if (orgId == null) throw new Error('loadSettingsCache вызван вне контекста организации');
   const [permRes, modRes, appRes] = await Promise.all([
     pool.query<{ role: Role; resource_code: ResourceCode; allowed: boolean }>('SELECT role, resource_code, allowed FROM permissions'),
     pool.query<{ code: string; enabled: boolean }>('SELECT code, enabled FROM module_settings'),
@@ -29,14 +44,16 @@ export async function loadSettingsCache(): Promise<void> {
     if (row.allowed) next[row.role].add(row.resource_code);
     else next[row.role].delete(row.resource_code);
   }
-  permissions = next;
 
   const nextModules: Record<string, boolean> = {};
   for (const m of MODULE_REGISTRY) nextModules[m.code] = m.defaultEnabled;
   for (const row of modRes.rows) nextModules[row.code] = row.enabled;
-  moduleEnabled = nextModules;
 
-  appSettings = Object.fromEntries(appRes.rows.map((r) => [r.key, r.value]));
+  cache.set(orgId, {
+    permissions: next,
+    moduleEnabled: nextModules,
+    appSettings: Object.fromEntries(appRes.rows.map((r) => [r.key, r.value])),
+  });
 }
 
 export async function seedSettingsDefaults(): Promise<void> {
@@ -67,19 +84,19 @@ export async function seedSettingsDefaults(): Promise<void> {
 }
 
 export function hasPermission(role: Role, resource: ResourceCode): boolean {
-  return permissions[role]?.has(resource) ?? false;
+  return settingsFor().permissions[role]?.has(resource) ?? false;
 }
 
 export function isModuleEnabled(code: string): boolean {
-  return moduleEnabled[code] ?? true;
+  return settingsFor().moduleEnabled[code] ?? true;
 }
 
-export function getAppSetting(key: string, fallback: string): string {
-  return appSettings[key] ?? fallback;
+export function getAppSetting(key: string, fallback: string, orgId?: number | null): string {
+  return settingsFor(orgId).appSettings[key] ?? fallback;
 }
 
-export function getSessionTimeoutMinutes(): number {
-  const raw = Number(getAppSetting('session_timeout_minutes', '720'));
+export function getSessionTimeoutMinutes(orgId?: number | null): number {
+  const raw = Number(getAppSetting('session_timeout_minutes', '720', orgId));
   return Number.isFinite(raw) && raw > 0 ? raw : 720;
 }
 

@@ -1,20 +1,17 @@
-import pg from 'pg';
+import type pg from 'pg';
+import { currentPool, publicPool } from './tenant.js';
 
-const { Pool } = pg;
-
-// DATE columns (oid 1082) default to JS Date objects parsed at local midnight, which then
-// shift by a day when serialized to JSON and re-parsed in a different timezone. We never do
-// date arithmetic in JS on these — return the raw 'YYYY-MM-DD' string instead.
-pg.types.setTypeParser(1082, (value: string) => value);
-
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error('DATABASE_URL is not set');
-}
-
-export const pool = new Pool({
-  connectionString,
-  ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
+/** Все модули ходят в БД через `pool`: внутри запроса авторизованного пользователя он сам ведёт в
+ * схему его организации, а вне контекста (вход, реестр организаций) — в общую схему. */
+export const pool: pg.Pool = new Proxy(publicPool, {
+  get(target, prop, receiver) {
+    if (prop === 'query' || prop === 'connect') {
+      const current = currentPool();
+      const value = (current as unknown as Record<string | symbol, unknown>)[prop];
+      return typeof value === 'function' ? value.bind(current) : value;
+    }
+    return Reflect.get(target, prop, receiver);
+  },
 });
 
 export async function withTransaction<T>(fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {

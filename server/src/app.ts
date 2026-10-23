@@ -27,7 +27,8 @@ import { usersRouter } from './modules/users/routes.js';
 import { warehouseRouter } from './modules/warehouse/routes.js';
 import { zavodyRouter } from './modules/zavody/routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
-import { requireAuth } from './middleware/auth.js';
+import { requireAuth, requirePlatformAdmin, requireTenant } from './middleware/auth.js';
+import { platformRouter } from './modules/platform/routes.js';
 import { requireAnyPermission, requirePermission } from './middleware/permission.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -41,6 +42,11 @@ export function createApp() {
   app.use('/api/auth', authRouter);
 
   app.use('/api', requireAuth);
+
+  // Владелец платформы: реестр организаций (без доступа к данным организаций).
+  app.use('/api/platform', requirePlatformAdmin, platformRouter);
+  app.use('/api/my-access', myAccessRouter);
+  app.use('/api', requireTenant);
 
   // Справочники (Контрагенты)
   const refPermission = requirePermission('references');
@@ -95,7 +101,6 @@ export function createApp() {
   app.use('/api/report', requirePermission('reports'), reportsRouter);
 
   // Ядро
-  app.use('/api/my-access', myAccessRouter);
   app.use('/api/users', requirePermission('users'), usersRouter);
   app.use('/api/settings', requirePermission('settings'), settingsRouter);
   app.use('/api/audit-log', requirePermission('auditLog'), auditLogRouter);

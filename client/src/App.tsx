@@ -9,11 +9,18 @@ import { ClientDetail } from './pages/ClientDetail';
 import { Counterparties } from './pages/Counterparties';
 import { Dashboard } from './pages/Dashboard';
 import { IncomingPage } from './pages/Incoming';
+import { Organizations } from './pages/Organizations';
 import { Login } from './pages/Login';
 import { Reports } from './pages/Reports';
 import { Sales } from './pages/Sales';
 import { Settings } from './pages/Settings';
 import { ZavodDetail } from './pages/ZavodDetail';
+
+/** Владелец платформы видит только «Организации»; сотрудники организации — свои разделы. */
+function HomeRoute() {
+  const { isPlatformAdmin } = useAuth();
+  return isPlatformAdmin ? <Navigate to="/organizations" replace /> : <Dashboard />;
+}
 
 function ProtectedLayout() {
   const { username, loading } = useAuth();
@@ -29,7 +36,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route element={<ProtectedLayout />}>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<HomeRoute />} />
+        <Route path="/organizations" element={<Organizations />} />
         <Route path="/incoming" element={<RequirePermission resource="incoming"><IncomingPage /></RequirePermission>} />
         <Route path="/sales" element={<RequirePermission resource="sales"><Sales /></RequirePermission>} />
         <Route path="/cash" element={<RequirePermission resource="cash"><Cash /></RequirePermission>} />

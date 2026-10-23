@@ -1,17 +1,22 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { api, ApiError } from '../api/client';
+import { queryClient } from '../api/queryClient';
 import type { UserRole } from '../types';
 
 interface Me {
   username: string;
   role: UserRole;
   fullName: string;
+  isPlatformAdmin: boolean;
+  organizationName: string | null;
 }
 
 interface AuthState {
   username: string | null;
   role: UserRole | null;
   fullName: string | null;
+  isPlatformAdmin: boolean;
+  organizationName: string | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -33,17 +38,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(username: string, password: string) {
     const res = await api.post<Me>('/auth/login', { username, password });
+    // Данные организаций не должны «переезжать» между входами разных пользователей.
+    queryClient.clear();
     setMe(res);
   }
 
   async function logout() {
     await api.post('/auth/logout');
+    queryClient.clear();
     setMe(null);
   }
 
   return (
     <AuthContext.Provider
-      value={{ username: me?.username ?? null, role: me?.role ?? null, fullName: me?.fullName ?? null, loading, login, logout }}
+      value={{
+        username: me?.username ?? null,
+        role: me?.role ?? null,
+        fullName: me?.fullName ?? null,
+        isPlatformAdmin: me?.isPlatformAdmin ?? false,
+        organizationName: me?.organizationName ?? null,
+        loading,
+        login,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>
