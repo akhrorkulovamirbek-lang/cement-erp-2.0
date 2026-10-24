@@ -313,6 +313,18 @@ export interface ZavodBalance {
   balance: string;
 }
 
+export interface SupplierReportRow {
+  type: 'zavod' | 'client';
+  id: number;
+  name: string;
+  received_tonnage: string;
+  received_sum: string;
+  sold_sum: string;
+  paid_by_us: string;
+  paid_by_him: string;
+  we_owe: string;
+}
+
 export interface CarrierBalance {
   name: string;
   logist_id?: number | null;

@@ -304,6 +304,52 @@ reportsRouter.get(
   }),
 );
 
+// Отчёт «Поставщики»: у кого мы покупаем цемент — заводы и клиенты с пометкой «Поставщик». По каждому:
+// сколько цемента получили и на какую сумму, что продали ему, сколько денег заплатили мы и он, и итог.
+// we_owe > 0 — мы должны ему, we_owe < 0 — он должен нам. У клиента-поставщика итог — общий баланс
+// карточки клиента с обратным знаком (продажи ему, цемент от него, деньги в обе стороны, корректировки).
+reportsRouter.get(
+  '/suppliers',
+  asyncHandler(async (_req, res) => {
+    const { rows } = await pool.query(
+      `SELECT 'zavod' AS type, z.id, z.name,
+              COALESCE(inc.tonnage, 0) AS received_tonnage,
+              z.initial_debt + COALESCE(inc.total, 0) AS received_sum,
+              0 AS sold_sum,
+              COALESCE(pay.total, 0) AS paid_by_us,
+              0 AS paid_by_him,
+              z.initial_debt + COALESCE(inc.total, 0) - COALESCE(pay.total, 0) AS we_owe
+       FROM zavody z
+       LEFT JOIN (
+         SELECT zavod_id, SUM(tonnage) AS tonnage, SUM(total_sum) AS total
+         FROM incoming WHERE ${ZAVOD_PURCHASED_EXCLUDE_CLIENT_GOODS} GROUP BY zavod_id
+       ) inc ON inc.zavod_id = z.id
+       LEFT JOIN (
+         SELECT zavod_id, SUM(${UZS_EXPENSE}) AS total FROM cash_expense
+         WHERE zavod_id IS NOT NULL AND category = 'цемент' GROUP BY zavod_id
+       ) pay ON pay.zavod_id = z.id
+       UNION ALL
+       SELECT 'client' AS type, c.id, c.name,
+              COALESCE(goods.tonnage, 0) AS received_tonnage,
+              COALESCE(goods.total, 0) AS received_sum,
+              COALESCE(sold.total, 0) AS sold_sum,
+              COALESCE(paid_him.total, 0) AS paid_by_us,
+              COALESCE(paid_us.total, 0) AS paid_by_him,
+              -(c.initial_debt + COALESCE(sold.total, 0) + COALESCE(adj_plus.total, 0) - COALESCE(paid_total.total, 0)) AS we_owe
+       FROM clients c
+       LEFT JOIN (SELECT client_id, SUM(tonnage) AS tonnage, SUM(total_sum) AS total FROM incoming WHERE warehouse = 'CLIENT_GOODS' AND client_id IS NOT NULL GROUP BY client_id) goods ON goods.client_id = c.id
+       LEFT JOIN (SELECT client_id, SUM(${UZS_SALE}) AS total FROM sales s WHERE client_id IS NOT NULL GROUP BY client_id) sold ON sold.client_id = c.id
+       LEFT JOIN (SELECT client_id, SUM(${UZS_EXPENSE}) AS total FROM cash_expense WHERE category = 'контрагент' AND client_id IS NOT NULL GROUP BY client_id) paid_him ON paid_him.client_id = c.id
+       LEFT JOIN (SELECT client_id, SUM(${UZS_INCOME}) AS total FROM cash_income WHERE client_id IS NOT NULL GROUP BY client_id) paid_us ON paid_us.client_id = c.id
+       LEFT JOIN (${CLIENT_ADJ_PLUS_SUBQUERY}) adj_plus ON adj_plus.client_id = c.id
+       LEFT JOIN (${CLIENT_PAID_SUBQUERY}) paid_total ON paid_total.client_id = c.id
+       WHERE c.is_supplier = true
+       ORDER BY type, name`,
+    );
+    res.json(rows);
+  }),
+);
+
 // Отчёт «Перевозчики»: по каждому — начислено за наёмные рейсы, выплачено, баланс. balance > 0 —
 // мы должны перевозчику, balance < 0 — переплата, перевозчик должен нам.
 reportsRouter.get(

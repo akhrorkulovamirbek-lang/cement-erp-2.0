@@ -9,6 +9,7 @@ import type {
   BrokerAccount,
   BrokerOperation,
   CarrierBalance,
+  SupplierReportRow,
   CashBalances,
   CashExpense,
   CashIncome,
@@ -46,6 +47,7 @@ const REPORT_KEYS = [
   'report-cash-balances',
   'carrier-balances',
   'report-carriers',
+  'report-suppliers',
 ];
 
 // TInput разрешает числа/булевы, где ответ API (T) хранит их как строки NUMERIC из Postgres —
@@ -249,6 +251,13 @@ export function useCarrierBalances() {
   return useQuery({
     queryKey: ['carrier-balances'],
     queryFn: () => api.get<CarrierBalance[]>('/cash-expense/carrier-balances'),
+  });
+}
+
+export function useSuppliersReport() {
+  return useQuery({
+    queryKey: ['report-suppliers'],
+    queryFn: () => api.get<SupplierReportRow[]>('/report/suppliers'),
   });
 }
 
