@@ -22,7 +22,7 @@ export interface ReportRow {
 const COLUMNS: { header: string; width: number; fmt?: string; align?: 'left' | 'right' | 'center' }[] = [
   { header: 'Дата', width: 12, align: 'center' },
   { header: 'Событие', width: 22 },
-  { header: 'Завод', width: 18 },
+  { header: 'Поставщик', width: 18 },
   { header: 'Марка', width: 14 },
   { header: 'Упаковка', width: 11 },
   { header: 'Тоннаж, т', width: 11, fmt: '#,##0.000', align: 'right' },

@@ -268,7 +268,7 @@ function ClearDataCard() {
       <CardContent className="p-4">
         <div className="font-medium text-destructive">Очистить все данные</div>
         <p className="mt-0.5 mb-3 text-sm text-muted-foreground">
-          Удаляет клиентов, заводы, марки, машины, банковские счета, приходы, продажи, тикеты, кассу, обналичивание и корректировки,
+          Удаляет клиентов, поставщиков, заводы, марки, машины, банковские счета, приходы, продажи, тикеты, кассу, обналичивание и корректировки,
           обнуляет брокерский счёт. Пользователи, права, настройки и журнал действий остаются. Действие нельзя отменить.
         </p>
         <div className="flex flex-wrap items-center gap-2">
@@ -323,12 +323,12 @@ const CASH_EXPENSE_CATEGORIES = ['цемент', 'логистика', 'пере
 
 const CLIENT_HEADERS = ['Имя', 'Телефон', 'Контактное лицо', 'ИНН', 'Начальный долг', 'Комментарий'] as const;
 const ZAVOD_HEADERS = ['Название', 'Регион', 'Телефон', 'Начальный долг'] as const;
-const INCOMING_HEADERS = ['Дата', 'Завод', 'Марка', 'Упаковка', 'Тоннаж', 'Цена за тонну', 'Номер машины', 'Комментарий'] as const;
+const INCOMING_HEADERS = ['Дата', 'Поставщик', 'Марка', 'Упаковка', 'Тоннаж', 'Цена за тонну', 'Номер машины', 'Комментарий'] as const;
 const SALE_HEADERS = [
   'Дата',
   'Тип',
   'Клиент',
-  'Завод',
+  'Поставщик',
   'Марка',
   'Упаковка',
   'Тоннаж',
@@ -345,7 +345,7 @@ const CASH_HEADERS = [
   'Тип',
   'Категория',
   'Клиент',
-  'Завод',
+  'Поставщик',
   'Перевозчик',
   'Сумма',
   'Валюта',
@@ -353,7 +353,7 @@ const CASH_HEADERS = [
   'Способ оплаты',
   'Комментарий',
 ] as const;
-const SNAPSHOT_HEADERS = ['Завод', 'Марка', 'Упаковка', 'Тоннаж', 'Себестоимость за тонну'] as const;
+const SNAPSHOT_HEADERS = ['Поставщик', 'Марка', 'Упаковка', 'Тоннаж', 'Себестоимость за тонну'] as const;
 
 function parseClientRow(raw: Record<string, string>) {
   const name = raw['Имя']?.trim();
@@ -391,7 +391,7 @@ function parseZavodRow(raw: Record<string, string>) {
 
 function parseIncomingRow(raw: Record<string, string>) {
   const date = raw['Дата']?.trim();
-  const zavod = raw['Завод']?.trim();
+  const zavod = raw['Поставщик']?.trim();
   const cement_mark = raw['Марка']?.trim();
   const packaging = toPackaging(raw['Упаковка'] ?? '');
   const tonnage = toNumber(raw['Тоннаж']);
@@ -455,7 +455,7 @@ function parseSaleRow(raw: Record<string, string>) {
   };
 
   if (saleType === 'CEMENT') {
-    const zavod = raw['Завод']?.trim();
+    const zavod = raw['Поставщик']?.trim();
     const cement_mark = raw['Марка']?.trim();
     const packaging = toPackaging(raw['Упаковка'] ?? '');
     const price_per_ton = toNumber(raw['Цена за тонну']);
@@ -503,7 +503,7 @@ function parseCashRow(raw: Record<string, string>) {
   if (type === 'income') {
     payload.client = raw['Клиент']?.trim() || null;
   } else {
-    payload.zavod = raw['Завод']?.trim() || null;
+    payload.zavod = raw['Поставщик']?.trim() || null;
     payload.carrier_name = raw['Перевозчик']?.trim() || null;
   }
 
@@ -514,7 +514,7 @@ function parseCashRow(raw: Record<string, string>) {
 }
 
 function parseSnapshotRow(raw: Record<string, string>) {
-  const zavod = raw['Завод']?.trim();
+  const zavod = raw['Поставщик']?.trim();
   const cement_mark = raw['Марка']?.trim();
   const packaging = toPackaging(raw['Упаковка'] ?? '');
   const tonnage = toNumber(raw['Тоннаж']);
@@ -551,7 +551,7 @@ function ImportTab() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Сначала загрузите Клиентов и Заводы, если их ещё нет в системе — остальные файлы ссылаются на них по
+        Сначала загрузите Клиентов и Поставщиков, если их ещё нет в системе — остальные файлы ссылаются на них по
         названию (неизвестные имена создаются автоматически). Приход и Продажи — это только история и долги, они
         не меняют текущий остаток склада; чтобы задать сам остаток — используйте блок «Остаток склада» внизу.
       </p>
@@ -564,9 +564,9 @@ function ImportTab() {
         onImport={(payloads) => createOneByOne(createClient, payloads)}
       />
       <FileImport
-        title="Заводы"
+        title="Поставщики"
         hint="Название обязательно."
-        templateFilename="Заводы_шаблон.xlsx"
+        templateFilename="Поставщики_шаблон.xlsx"
         templateHeaders={[...ZAVOD_HEADERS]}
         parseRow={parseZavodRow}
         onImport={(payloads) => createOneByOne(createZavod, payloads)}
@@ -581,7 +581,7 @@ function ImportTab() {
       />
       <FileImport
         title="Продажи"
-        hint="Тип — «Цемент» или «Логистика» (для Цемента нужны завод/марка/упаковка). Тип машины — «Клиент»/«Своя»/«Наёмная»."
+        hint="Тип — «Цемент» или «Логистика» (для Цемента нужны поставщик/марка/упаковка). Тип машины — «Клиент»/«Своя»/«Наёмная»."
         templateFilename="Продажи_шаблон.xlsx"
         templateHeaders={[...SALE_HEADERS]}
         parseRow={parseSaleRow}

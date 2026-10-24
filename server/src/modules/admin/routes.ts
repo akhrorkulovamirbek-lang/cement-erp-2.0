@@ -28,6 +28,7 @@ const DATA_TABLES = [
   'cement_marks',
   'clients',
   'zavody',
+  'factories',
 ];
 
 adminRouter.post(

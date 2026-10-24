@@ -61,10 +61,10 @@ const INCOME_CATEGORY_OPTIONS = [
   { value: 'прочее', label: 'Прочее' },
 ];
 const EXPENSE_CATEGORY_OPTIONS = [
-  { value: 'цемент', label: 'Оплата заводу' },
+  { value: 'цемент', label: 'Оплата поставщику' },
   { value: 'логистика', label: 'Логистика' },
   { value: 'перевозчик', label: 'Оплата перевозчику' },
-  { value: 'контрагент', label: 'Оплата поставщику (клиенту)' },
+  { value: 'контрагент', label: 'Оплата клиенту-поставщику' },
   { value: 'прочее', label: 'Прочее' },
 ];
 const KIND_OPTIONS = [
@@ -474,7 +474,7 @@ export function Cash() {
               </div>
             )}
             {formKind === 'expense' && category === 'цемент' && (
-              <FormRow label="Завод">
+              <FormRow label="Поставщик">
                 <RHFSelect
                   control={control}
                   name="zavod_id"

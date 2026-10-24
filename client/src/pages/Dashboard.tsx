@@ -133,7 +133,7 @@ export function Dashboard() {
           }))}
         />
         <DebtCard
-          title="Должны мы заводам"
+          title="Должны мы поставщикам"
           total={debts.data?.zavodDebtTotal ?? 0}
           items={(debts.data?.topZavody ?? []).map((z) => ({
             key: z.id,
@@ -157,7 +157,7 @@ export function Dashboard() {
           <div className="mb-6 grid gap-4 sm:grid-cols-3">
             {(debts.data?.zavodOverpaidTotal ?? 0) > 0 && (
               <DebtCard
-                title="Должны нам заводы"
+                title="Должны нам поставщики"
                 tone="owedToUs"
                 total={debts.data?.zavodOverpaidTotal ?? 0}
                 items={(debts.data?.topZavodyOverpaid ?? []).map((z) => ({ key: z.id, label: z.name, value: z.balance, href: `/zavody/${z.id}` }))}

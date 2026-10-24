@@ -7,7 +7,6 @@ import {
   useClientBalances,
   useSuppliersReport,
   useVehiclesReport,
-  useZavodBalances,
 } from '@/api/modules';
 import { Badge } from '@/components/Badge';
 import { DataTable, type Column } from '@/components/DataTable';
@@ -20,20 +19,19 @@ import { PACKAGING_LABELS } from '@/lib/constants';
 import { formatMoney, formatNumber } from '@/lib/format';
 import { downloadStyledTable } from '@/lib/styledExcel';
 import { useToast } from '@/lib/toast';
-import type { CarrierBalance, CementReportRow, ClientBalance, SupplierReportRow, VehicleReportRow, ZavodBalance } from '@/types';
+import type { CarrierBalance, CementReportRow, ClientBalance, SupplierReportRow, VehicleReportRow } from '@/types';
 
 /** Раздел «Отчёты» — пять готовых разрезов, не конструктор (см. контекст плана): владелец
  * подтвердил, что нужны конкретные готовые срезы с фильтром периода, а не гибкая сборка полей. */
 export function Reports() {
   return (
     <div>
-      <PageHeader title="Отчёты" subtitle="Цемент, логистика, контрагенты и обналичивание — в одном месте" />
+      <PageHeader title="Отчёты" subtitle="Цемент, логистика, клиенты, поставщики и обналичивание — в одном месте" />
       <Tabs defaultValue="cement">
         <TabsList className="flex-wrap">
           <TabsTrigger value="cement">Цемент</TabsTrigger>
           <TabsTrigger value="vehicles">Логистика</TabsTrigger>
           <TabsTrigger value="clients">Клиенты</TabsTrigger>
-          <TabsTrigger value="zavody">Заводы</TabsTrigger>
           <TabsTrigger value="suppliers">Поставщики</TabsTrigger>
           <TabsTrigger value="carriers">Перевозчики</TabsTrigger>
           <TabsTrigger value="cash-service">Обналичивание</TabsTrigger>
@@ -48,10 +46,6 @@ export function Reports() {
         <TabsContent value="clients" className="mt-4">
           <p className="mb-3 text-xs text-muted-foreground">Долги и баланс на сегодня — от выбора периода не зависят (периоды есть на вкладках «Цемент», «Логистика», «Обналичивание»).</p>
           <ClientsTab />
-        </TabsContent>
-        <TabsContent value="zavody" className="mt-4">
-          <p className="mb-3 text-xs text-muted-foreground">Долги и баланс на сегодня — от выбора периода не зависят (периоды есть на вкладках «Цемент», «Логистика», «Обналичивание»).</p>
-          <ZavodyTab />
         </TabsContent>
         <TabsContent value="suppliers" className="mt-4">
           <p className="mb-3 text-xs text-muted-foreground">Долги и баланс на сегодня — от выбора периода не зависят.</p>
@@ -75,7 +69,7 @@ function CementTab() {
   const report = useCementReport({ from: from || undefined, to: to || undefined });
 
   const columns: Column<CementReportRow>[] = [
-    { key: 'zavod_name', header: 'Завод', sortValue: (r) => r.zavod_name },
+    { key: 'zavod_name', header: 'Поставщик', sortValue: (r) => r.zavod_name },
     { key: 'cement_mark_name', header: 'Марка', sortValue: (r) => r.cement_mark_name },
     { key: 'packaging', header: 'Упаковка', render: (r) => PACKAGING_LABELS[r.packaging] },
     {
@@ -313,7 +307,7 @@ function ClientsTab() {
   );
 }
 
-/** Поставщики: заводы и клиенты с пометкой «Поставщик» — что получили, что продали им, что заплатили
+/** Поставщики: поставщики и клиенты с пометкой «Поставщик» — что получили, что продали им, что заплатили
  * в обе стороны и итог. Скачивается в Excel так же, как отчёт по клиенту. */
 function SuppliersTab() {
   const { notify } = useToast();
@@ -330,7 +324,7 @@ function SuppliersTab() {
           <Link to={r.type === 'zavod' ? `/zavody/${r.id}` : `/clients/${r.id}`} className="font-medium text-primary hover:underline">
             {r.name}
           </Link>
-          <Badge tone={r.type === 'zavod' ? 'slate' : 'blue'}>{r.type === 'zavod' ? 'Завод' : 'Клиент-поставщик'}</Badge>
+          <Badge tone={r.type === 'zavod' ? 'slate' : 'blue'}>{r.type === 'zavod' ? 'Поставщик' : 'Клиент-поставщик'}</Badge>
         </span>
       ),
     },
@@ -369,7 +363,7 @@ function SuppliersTab() {
         filename: 'Отчёт_по_поставщикам.xlsx',
         sheetName: 'Поставщики',
         title: 'Отчёт по поставщикам',
-        subtitle: 'заводы и клиенты-поставщики',
+        subtitle: 'поставщики и клиенты-поставщики',
         summary: [
           [totals.owe < 0 ? 'Поставщики должны нам, сум' : 'Мы должны поставщикам, сум', Math.abs(totals.owe), '#,##0'],
           ['Получено цемента, т', totals.tonnage, '#,##0.000'],
@@ -386,7 +380,7 @@ function SuppliersTab() {
         ],
         rows: rows.map((r) => [
           r.name,
-          r.type === 'zavod' ? 'Завод' : 'Клиент-поставщик',
+          r.type === 'zavod' ? 'Поставщик' : 'Клиент-поставщик',
           Number(r.received_tonnage),
           Number(r.received_sum),
           Number(r.sold_sum),
@@ -483,77 +477,6 @@ function CarriersTab() {
         formatMoney(totals.owed),
         formatMoney(totals.paid),
         totals.balance < 0 ? `Должны нам ${formatMoney(-totals.balance)}` : `Мы должны ${formatMoney(totals.balance)}`,
-      ]}
-    />
-  );
-}
-
-function ZavodyTab() {
-  const balances = useZavodBalances();
-
-  const columns: Column<ZavodBalance>[] = [
-    {
-      key: 'name',
-      header: 'Завод',
-      sortValue: (r) => r.name,
-      render: (r) => (
-        <Link to={`/zavody/${r.id}`} className="font-medium text-primary hover:underline">
-          {r.name}
-        </Link>
-      ),
-    },
-    {
-      key: 'purchased',
-      header: 'Куплено',
-      align: 'right',
-      sortValue: (r) => Number(r.purchased),
-      render: (r) => formatMoney(r.purchased),
-    },
-    {
-      key: 'paid',
-      header: 'Оплачено',
-      align: 'right',
-      sortValue: (r) => Number(r.paid),
-      render: (r) => formatMoney(r.paid),
-    },
-    {
-      key: 'balance',
-      header: 'Мы должны',
-      align: 'right',
-      sortValue: (r) => Number(r.balance),
-      render: (r) => {
-        const n = Number(r.balance);
-        if (n === 0) return <Badge tone="green">Долга нет</Badge>;
-        if (n < 0) return <span className="font-semibold text-emerald-600">Должен нам {formatMoney(-n)}</span>;
-        return <span className="font-semibold text-destructive">{formatMoney(n)}</span>;
-      },
-    },
-  ];
-
-  const rows = balances.data ?? [];
-  const totals = rows.reduce(
-    (acc, r) => ({
-      purchased: acc.purchased + Number(r.purchased),
-      paid: acc.paid + Number(r.paid),
-      balance: acc.balance + Number(r.balance),
-    }),
-    { purchased: 0, paid: 0, balance: 0 },
-  );
-
-  return (
-    <DataTable
-      columns={columns}
-      rows={rows}
-      loading={balances.isLoading}
-      getRowId={(r) => r.id}
-      emptyMessage="Нет заводов"
-      footer={[
-        'Итого',
-        formatMoney(totals.purchased),
-        formatMoney(totals.paid),
-        <span key="balance" className={totals.balance > 0 ? 'font-semibold text-destructive' : 'font-semibold'}>
-          {formatMoney(totals.balance)}
-        </span>,
       ]}
     />
   );

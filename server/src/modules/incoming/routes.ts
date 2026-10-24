@@ -38,8 +38,9 @@ incomingRouter.get(
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
-      `SELECT i.*, z.name AS zavod_name, cm.name AS cement_mark_name, c.name AS client_name
+      `SELECT i.*, z.name AS zavod_name, cm.name AS cement_mark_name, c.name AS client_name, f.name AS factory_name
        FROM incoming i
+       LEFT JOIN factories f ON f.id = i.factory_id
        JOIN zavody z ON z.id = i.zavod_id
        JOIN cement_marks cm ON cm.id = i.cement_mark_id
        LEFT JOIN clients c ON c.id = i.client_id

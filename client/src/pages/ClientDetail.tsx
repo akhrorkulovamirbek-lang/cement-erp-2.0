@@ -682,7 +682,7 @@ export function ClientDetail() {
             <FormRow label="Дата">
               <Input type="date" {...goodsForm.register('date', { required: true })} />
             </FormRow>
-            <FormRow label="Завод" error={goodsForm.formState.errors.zavod_id?.message}>
+            <FormRow label="Поставщик" error={goodsForm.formState.errors.zavod_id?.message}>
               <RHFSelect
                 control={goodsForm.control}
                 name="zavod_id"

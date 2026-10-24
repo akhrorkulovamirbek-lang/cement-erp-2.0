@@ -186,6 +186,8 @@ export interface Ticket {
   bought_sum: string;
   remaining_tonnage: string;
   remaining_sum: string;
+  factory_id: number | null;
+  factory_name: string | null;
   status: 'active' | 'closed';
   created_at: string;
 }
@@ -205,6 +207,8 @@ export interface Incoming {
   price_per_ton: string;
   total_sum: string;
   machine_number: string | null;
+  factory_id: number | null;
+  factory_name: string | null;
   client_id: number | null;
   client_name: string | null;
   comment: string | null;
@@ -457,4 +461,13 @@ export interface LogistDetailData {
   payments: { id: number; date: string; amount: string; currency: 'UZS' | 'USD'; usd_rate: string | null; payment_type: string; comment: string | null; amount_uzs: string }[];
   adjustments: { id: number; date: string; amount: string; comment: string }[];
   summary: { owed: string; paid: string; balance: string };
+}
+
+export interface Factory {
+  id: number;
+  name: string;
+  region: string | null;
+  comment: string | null;
+  active: boolean;
+  created_at: string;
 }

@@ -20,6 +20,7 @@ interface PurchaseRow {
   date: string;
   source: Source;
   cementMarkName: string;
+  factoryName: string;
   packaging: string;
   tonnage: string;
   pricePerTon: string;
@@ -30,11 +31,11 @@ interface PurchaseRow {
 const SOURCE_LABEL: Record<Source, string> = {
   FACT: 'Факт',
   DIRECT: 'Напрямую',
-  CLIENT_GOODS: 'От клиента (не в долг заводу)',
+  CLIENT_GOODS: 'От клиента (не в долг поставщику)',
   ticket: 'Тикет',
 };
 
-/** Карточка завода: покупки и оплаты по датам. Период, быстрые фильтры и поиск работают на обе таблицы,
+/** Карточка поставщика: покупки и оплаты по датам. Период, быстрые фильтры и поиск работают на обе таблицы,
  * итоги считаются по тому, что показано. Весь отчёт можно скачать в Excel (с остатком долга по ходу). */
 export function ZavodDetail() {
   const { id } = useParams<{ id: string }>();
@@ -61,6 +62,7 @@ export function ZavodDetail() {
         date: r.date,
         source: r.warehouse,
         cementMarkName: r.cement_mark_name,
+        factoryName: r.factory_name ?? '',
         packaging: PACKAGING_LABELS[r.packaging],
         tonnage: r.tonnage,
         pricePerTon: r.price_per_ton,
@@ -74,6 +76,7 @@ export function ZavodDetail() {
         date: t.date,
         source: 'ticket',
         cementMarkName: t.cement_mark_name,
+        factoryName: t.factory_name ?? '',
         packaging: PACKAGING_LABELS[t.packaging],
         tonnage: t.bought_tonnage,
         pricePerTon: t.price_per_ton,
@@ -89,7 +92,7 @@ export function ZavodDetail() {
   const purchases = allPurchases.filter(
     (r) =>
       inPeriod(r.date) &&
-      (!needle || [r.cementMarkName, r.machine, r.packaging, SOURCE_LABEL[r.source]].some((v) => v.toLowerCase().includes(needle))),
+      (!needle || [r.cementMarkName, r.factoryName, r.machine, r.packaging, SOURCE_LABEL[r.source]].some((v) => v.toLowerCase().includes(needle))),
   );
   const paymentRows = (payments.data ?? []).filter(
     (r) =>
@@ -116,6 +119,7 @@ export function ZavodDetail() {
         return <Badge tone="slate">Факт</Badge>;
       },
     },
+    { key: 'factoryName', header: 'Завод', render: (r) => r.factoryName || '—' },
     { key: 'cementMarkName', header: 'Марка' },
     {
       key: 'machine',
@@ -151,7 +155,7 @@ export function ZavodDetail() {
       render: (r) => formatMoney(r.totalSum),
     },
   ];
-  const purchaseFooter: ReactNode[] = ['Итого', '', '', '', `${formatNumber(totalTonnage, 2)} т`, '', formatMoney(totalSum)];
+  const purchaseFooter: ReactNode[] = ['Итого', '', '', '', '', `${formatNumber(totalTonnage, 2)} т`, '', formatMoney(totalSum)];
 
   const paymentColumns: Column<CashExpense>[] = [
     { key: 'date', header: 'Дата', sortValue: (r) => r.date, render: (r) => formatDate(r.date) },
@@ -180,7 +184,8 @@ export function ZavodDetail() {
         fill: r.source === 'ticket' || r.source === 'CLIENT_GOODS' ? 'FFE3F0FB' : 'FFFFF4E0',
         row: [
           r.date,
-          credit ? `Покупка (${SOURCE_LABEL[r.source].toLowerCase()})` : r.source === 'ticket' ? 'Тикет (оплачен с брокерского счёта)' : 'Принят цемент от клиента (не в долг заводу)',
+          credit ? `Покупка (${SOURCE_LABEL[r.source].toLowerCase()})` : r.source === 'ticket' ? 'Тикет (оплачен с брокерского счёта)' : 'Принят цемент от клиента (не в долг поставщику)',
+          r.factoryName,
           r.cementMarkName,
           r.packaging,
           r.machine,
@@ -200,7 +205,7 @@ export function ZavodDetail() {
         order: `p-${r.id}`,
         delta: counts ? -uzs(r) : 0,
         fill: 'FFE6F4EA',
-        row: [r.date, 'Оплата заводу', '', '', '', null, null, null, counts ? uzs(r) : null, r.payment_type, r.comment ?? ''],
+        row: [r.date, 'Оплата поставщику', '', '', '', '', null, null, null, counts ? uzs(r) : null, r.payment_type, r.comment ?? ''],
       });
     }
     events.sort((a, b) => a.date.localeCompare(b.date) || a.order.localeCompare(b.order));
@@ -210,7 +215,7 @@ export function ZavodDetail() {
     const rows: (string | number | null)[][] = [];
     const fills: (string | undefined)[] = [];
     if (opening) {
-      rows.push(['', 'Начальный долг', '', '', '', null, null, opening, null, '', '', opening]);
+      rows.push(['', 'Начальный долг', '', '', '', '', null, null, opening, null, '', '', opening]);
       fills.push('FFEDEDED');
     }
     for (const e of events) {
@@ -220,17 +225,18 @@ export function ZavodDetail() {
     }
     try {
       await downloadStyledTable({
-        filename: `Завод_${zavod?.name ?? zavodId}.xlsx`,
-        sheetName: 'Отчёт по заводу',
-        title: `Отчёт по заводу: ${zavod?.name ?? ''}`,
+        filename: `Поставщик_${zavod?.name ?? zavodId}.xlsx`,
+        sheetName: 'Отчёт по поставщику',
+        title: `Отчёт по поставщику: ${zavod?.name ?? ''}`,
         summary: [
           ['Куплено всего (в долг), сум', Number(balance?.purchased ?? 0), '#,##0'],
           ['Оплачено всего, сум', Number(balance?.paid ?? 0), '#,##0'],
-          [Number(balance?.balance ?? 0) < 0 ? 'Завод должен нам, сум' : 'Мы должны заводу, сум', Math.abs(Number(balance?.balance ?? 0)), '#,##0'],
+          [Number(balance?.balance ?? 0) < 0 ? 'Поставщик должен нам, сум' : 'Мы должны поставщику, сум', Math.abs(Number(balance?.balance ?? 0)), '#,##0'],
         ],
         columns: [
           { header: 'Дата', width: 12, align: 'center' },
           { header: 'Событие', width: 34 },
+          { header: 'Завод', width: 18 },
           { header: 'Марка', width: 16 },
           { header: 'Упаковка', width: 11 },
           { header: 'Машина', width: 16 },
@@ -244,7 +250,7 @@ export function ZavodDetail() {
         ],
         rows,
         rowFills: fills,
-        totals: ['ИТОГО', '', '', '', '', null, null, Number(balance?.purchased ?? 0), Number(balance?.paid ?? 0), '', '', Number(balance?.balance ?? 0)],
+        totals: ['ИТОГО', '', '', '', '', '', null, null, Number(balance?.purchased ?? 0), Number(balance?.paid ?? 0), '', '', Number(balance?.balance ?? 0)],
       });
     } catch {
       notify('Не удалось сформировать файл', 'error');
@@ -269,7 +275,7 @@ export function ZavodDetail() {
         <StatCard label="Куплено всего (прямые приходы)" value={formatMoney(balance?.purchased ?? 0)} />
         <StatCard label="Оплачено" value={formatMoney(balance?.paid ?? 0)} />
         <StatCard
-          label={Number(balance?.balance ?? 0) < 0 ? 'Завод должен нам' : 'Мы должны'}
+          label={Number(balance?.balance ?? 0) < 0 ? 'Поставщик должен нам' : 'Мы должны'}
           value={formatMoney(Math.abs(Number(balance?.balance ?? 0)))}
           tone={Number(balance?.balance ?? 0) > 0 ? 'negative' : 'positive'}
         />
@@ -280,7 +286,7 @@ export function ZavodDetail() {
       <h2 className="mb-2 text-sm font-semibold">За выбранный период{from || to ? '' : ' (за всё время)'}</h2>
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Куплено в долг" value={formatMoney(boughtOnCredit)} />
-        <StatCard label="Оплачено заводу" value={formatMoney(paidTotal)} />
+        <StatCard label="Оплачено поставщику" value={formatMoney(paidTotal)} />
         <StatCard label="Разница" value={formatMoney(boughtOnCredit - paidTotal)} tone={boughtOnCredit - paidTotal > 0 ? 'negative' : 'positive'} />
       </div>
 

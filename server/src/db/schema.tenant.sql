@@ -16,6 +16,16 @@ ALTER TABLE zavody ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE zavody ADD COLUMN IF NOT EXISTS initial_debt NUMERIC(16,2) NOT NULL DEFAULT 0;
 ALTER TABLE zavody ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
 
+-- Заводы-производители цемента (справочник без расчётов). Расчёты — с поставщиком (таблица zavody).
+CREATE TABLE IF NOT EXISTS factories (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  region TEXT,
+  comment TEXT,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS clients (
   id SERIAL PRIMARY KEY,
   name TEXT UNIQUE NOT NULL,
@@ -464,3 +474,7 @@ CREATE TABLE IF NOT EXISTS client_debt_adjustments (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_client_debt_adjustments_client ON client_debt_adjustments(client_id);
+
+-- С какого завода-производителя пришёл цемент (необязательно): приход и тикет.
+ALTER TABLE incoming ADD COLUMN IF NOT EXISTS factory_id INTEGER REFERENCES factories(id);
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS factory_id INTEGER REFERENCES factories(id);

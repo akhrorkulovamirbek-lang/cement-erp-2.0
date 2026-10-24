@@ -2,7 +2,7 @@ import { LogistsTab } from './Logists';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { ApiError } from '@/api/client';
-import { bankAccountsHooks, cementMarksHooks, logisticsExpenseCategoriesHooks, machinesHooks } from '@/api/modules';
+import { bankAccountsHooks, cementMarksHooks, factoriesHooks, logisticsExpenseCategoriesHooks, machinesHooks } from '@/api/modules';
 import { Badge } from '@/components/Badge';
 import { RHFButtonGroup } from '@/components/ButtonGroup';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -25,16 +25,18 @@ import { Zavody } from './Zavody';
  * страницы /clients/:id, /zavody/:id), просто монтируются вкладками. */
 export function Counterparties() {
   const marks = cementMarksHooks.useList();
+  const factories = factoriesHooks.useList();
   const machines = machinesHooks.useList();
 
   return (
     <div>
-      <PageHeader title="Контрагенты" subtitle="Клиенты, заводы и общие справочники" />
+      <PageHeader title="Контрагенты" subtitle="Клиенты, поставщики, заводы и общие справочники" />
 
       <Tabs defaultValue="clients">
         <TabsList className="flex-wrap">
           <TabsTrigger value="clients">Клиенты</TabsTrigger>
-          <TabsTrigger value="zavody">Заводы</TabsTrigger>
+          <TabsTrigger value="zavody">Поставщики</TabsTrigger>
+          <TabsTrigger value="factories">Заводы</TabsTrigger>
           <TabsTrigger value="marks">Марки цемента</TabsTrigger>
           <TabsTrigger value="logists">Логисты</TabsTrigger>
           <TabsTrigger value="machines">Свои машины</TabsTrigger>
@@ -48,6 +50,24 @@ export function Counterparties() {
 
         <TabsContent value="zavody" className="mt-4">
           <Zavody />
+        </TabsContent>
+
+        <TabsContent value="factories" className="mt-4">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Заводы-производители цемента. Расчёты ведутся с поставщиком; завод просто указывается в приходе и тикете, чтобы было видно, откуда цемент.
+          </p>
+          <SimpleRefTable
+            title="Заводы"
+            addLabel="Добавить завод"
+            fieldLabel="Название"
+            fieldName="name"
+            rows={factories.data}
+            loading={factories.isLoading}
+            useCreate={factoriesHooks.useCreate}
+            useUpdate={factoriesHooks.useUpdate}
+            useDelete={factoriesHooks.useDelete}
+            displayValue={(r) => r.name}
+          />
         </TabsContent>
 
         <TabsContent value="marks" className="mt-4">

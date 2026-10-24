@@ -47,7 +47,7 @@ export const saleSchema = baseSaleSchema.superRefine((data, ctx) => {
     } else if (data.source === 'ticket') {
       if (!data.ticket_id) ctx.addIssue({ code: 'custom', path: ['ticket_id'], message: 'Выберите тикет' });
     } else {
-      if (!data.zavod_id) ctx.addIssue({ code: 'custom', path: ['zavod_id'], message: 'Выберите завод' });
+      if (!data.zavod_id) ctx.addIssue({ code: 'custom', path: ['zavod_id'], message: 'Выберите поставщика' });
       if (!data.cement_mark_id) ctx.addIssue({ code: 'custom', path: ['cement_mark_id'], message: 'Выберите марку цемента' });
       if (!data.packaging) ctx.addIssue({ code: 'custom', path: ['packaging'], message: 'Выберите упаковку' });
     }
@@ -97,7 +97,7 @@ function validateDeferred(data: z.infer<typeof baseSaleSchema>, ctx: z.Refinemen
     } else if (data.source === 'ticket') {
       if (!data.ticket_id) ctx.addIssue({ code: 'custom', path: ['ticket_id'], message: 'Выберите тикет' });
     } else {
-      if (!data.zavod_id) ctx.addIssue({ code: 'custom', path: ['zavod_id'], message: 'Выберите завод' });
+      if (!data.zavod_id) ctx.addIssue({ code: 'custom', path: ['zavod_id'], message: 'Выберите поставщика' });
       if (!data.cement_mark_id) ctx.addIssue({ code: 'custom', path: ['cement_mark_id'], message: 'Выберите марку цемента' });
       if (!data.packaging) ctx.addIssue({ code: 'custom', path: ['packaging'], message: 'Выберите упаковку' });
     }

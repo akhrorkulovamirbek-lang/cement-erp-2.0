@@ -81,8 +81,8 @@ async function updateLinkedSale(client: pg.PoolClient, saleId: number, incomingI
 export async function createIncoming(client: pg.PoolClient, data: IncomingInput) {
   const totalSum = data.tonnage * data.price_per_ton;
   const { rows } = await client.query(
-    `INSERT INTO incoming (date, warehouse, zavod_id, cement_mark_id, packaging, tonnage, price_per_ton, total_sum, machine_number, comment, client_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    `INSERT INTO incoming (date, warehouse, zavod_id, cement_mark_id, packaging, tonnage, price_per_ton, total_sum, machine_number, comment, client_id, factory_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
     [
       data.date,
       data.warehouse,
@@ -95,6 +95,7 @@ export async function createIncoming(client: pg.PoolClient, data: IncomingInput)
       data.machine_number ?? null,
       data.comment ?? null,
       data.warehouse === 'CLIENT_GOODS' ? data.client_id : null,
+      data.factory_id ?? null,
     ],
   );
   const incoming = rows[0];
@@ -118,8 +119,8 @@ export async function updateIncoming(client: pg.PoolClient, id: number, data: In
   const totalSum = data.tonnage * data.price_per_ton;
   const { rows } = await client.query(
     `UPDATE incoming SET date=$1, warehouse=$2, zavod_id=$3, cement_mark_id=$4, packaging=$5,
-       tonnage=$6, price_per_ton=$7, total_sum=$8, machine_number=$9, comment=$10, client_id=$11
-     WHERE id=$12 RETURNING *`,
+       tonnage=$6, price_per_ton=$7, total_sum=$8, machine_number=$9, comment=$10, client_id=$11, factory_id=$12
+     WHERE id=$13 RETURNING *`,
     [
       data.date,
       data.warehouse,
@@ -132,6 +133,7 @@ export async function updateIncoming(client: pg.PoolClient, id: number, data: In
       data.machine_number ?? null,
       data.comment ?? null,
       data.warehouse === 'CLIENT_GOODS' ? data.client_id : null,
+      data.factory_id ?? null,
       id,
     ],
   );

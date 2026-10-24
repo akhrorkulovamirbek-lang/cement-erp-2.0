@@ -440,7 +440,7 @@ export function Sales() {
                   </FormRow>
                 ) : (
                   <>
-                    <FormRow label="Завод" error={formState.errors.zavod_id?.message}>
+                    <FormRow label="Поставщик" error={formState.errors.zavod_id?.message}>
                       <RHFSelect control={control} name="zavod_id" options={(zavody.data ?? []).map((z) => ({ value: String(z.id), label: z.name }))} />
                     </FormRow>
                     <FormRow label="Марка цемента" error={formState.errors.cement_mark_id?.message}>

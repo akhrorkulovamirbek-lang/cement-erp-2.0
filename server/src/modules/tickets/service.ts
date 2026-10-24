@@ -11,9 +11,9 @@ export async function createTicket(client: pg.PoolClient, data: CreateTicketInpu
   const boughtSum = data.tonnage * data.price_per_ton;
 
   const { rows } = await client.query(
-    `INSERT INTO tickets (date, ticket_number, zavod_id, cement_mark_id, packaging, bought_tonnage, price_per_ton, bought_sum, remaining_tonnage, remaining_sum, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $6, $8, 'active') RETURNING *`,
-    [data.date, data.ticket_number, data.zavod_id, data.cement_mark_id, data.packaging, data.tonnage, data.price_per_ton, boughtSum],
+    `INSERT INTO tickets (date, ticket_number, zavod_id, cement_mark_id, packaging, bought_tonnage, price_per_ton, bought_sum, remaining_tonnage, remaining_sum, status, factory_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $6, $8, 'active', $9) RETURNING *`,
+    [data.date, data.ticket_number, data.zavod_id, data.cement_mark_id, data.packaging, data.tonnage, data.price_per_ton, boughtSum, data.factory_id ?? null],
   );
   const ticket = rows[0];
 
@@ -74,9 +74,9 @@ export async function updateTicket(client: pg.PoolClient, id: number, data: Upda
   }
 
   const { rows: updated } = await client.query(
-    `UPDATE tickets SET ticket_number = $1, zavod_id = $2, cement_mark_id = $3, price_per_ton = $4, bought_sum = $5, remaining_sum = $6
-     WHERE id = $7 RETURNING *`,
-    [data.ticket_number, data.zavod_id, data.cement_mark_id, newPrice, newBoughtSum, newRemainingSum, id],
+    `UPDATE tickets SET ticket_number = $1, zavod_id = $2, cement_mark_id = $3, price_per_ton = $4, bought_sum = $5, remaining_sum = $6, factory_id = $7
+     WHERE id = $8 RETURNING *`,
+    [data.ticket_number, data.zavod_id, data.cement_mark_id, newPrice, newBoughtSum, newRemainingSum, data.factory_id ?? null, id],
   );
   return updated[0];
 }

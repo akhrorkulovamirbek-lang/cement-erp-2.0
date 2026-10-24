@@ -84,7 +84,7 @@ export function Zavody() {
     try {
       if (editing === 'new') {
         await create.mutateAsync(payload);
-        notify('Завод добавлен');
+        notify('Поставщик добавлен');
       } else if (editing) {
         await update.mutateAsync({ id: editing.id, data: payload });
         notify('Сохранено');
@@ -110,7 +110,7 @@ export function Zavody() {
   const columns: Column<Row>[] = [
     {
       key: 'name',
-      header: 'Завод',
+      header: 'Поставщик',
       sortValue: (r) => r.name,
       render: (r) => (
         <Link to={`/zavody/${r.id}`} className="font-medium text-primary hover:underline">
@@ -155,14 +155,14 @@ export function Zavody() {
   return (
     <div>
       <PageHeader
-        title="Заводы"
+        title="Поставщики"
         subtitle="Кредиторка считается по прямым приходам (без тикетов — те оплачены сразу с биржи)"
         action={
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setBulkOpen(true)}>
               Добавить списком
             </Button>
-            <Button onClick={openNew}>+ Добавить завод</Button>
+            <Button onClick={openNew}>+ Добавить поставщика</Button>
           </div>
         }
       />
@@ -178,7 +178,7 @@ export function Zavody() {
       />
 
       {editing && (
-        <SidePanel title={editing === 'new' ? 'Новый завод' : 'Изменить завод'} onClose={() => setEditing(null)}>
+        <SidePanel title={editing === 'new' ? 'Новый поставщик' : 'Изменить поставщика'} onClose={() => setEditing(null)}>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <FormRow label="Название" error={formState.errors.name?.message}>
               <Input autoFocus {...register('name', { required: 'Укажите название' })} />
@@ -207,8 +207,8 @@ export function Zavody() {
 
       {deleting && (
         <ConfirmDialog
-          title="Удалить завод?"
-          message="Удалить? Это возможно только если завод нигде не используется. Чтобы скрыть завод из списков, но сохранить историю — снимите галочку «Активен»."
+          title="Удалить поставщика?"
+          message="Удалить? Это возможно только если поставщик нигде не используется. Чтобы скрыть поставщика из списков, но сохранить историю — снимите галочку «Активен»."
           onConfirm={onDelete}
           onCancel={() => setDeleting(null)}
         />
@@ -216,7 +216,7 @@ export function Zavody() {
 
       {bulkOpen && (
         <BulkImport
-          title="Добавить заводы списком"
+          title="Добавить поставщиков списком"
           hint="По одной записи на строку: Название; Регион; Телефон; Начальный долг (регион, телефон и долг необязательны)."
           placeholder={'Кызылкумцемент; Навои; +998901234567; 10000000\nБекабадцемент'}
           parseLine={parseZavodLine}

@@ -6,7 +6,9 @@ const vehicleTypeEnum = z.enum(['CLIENT', 'OWN', 'HIRED']);
 const baseIncomingSchema = z.object({
   date: z.string().min(1),
   warehouse: z.enum(['FACT', 'DIRECT', 'CLIENT_GOODS']).default('FACT'),
-  zavod_id: z.coerce.number().int().positive('Выберите завод'),
+  zavod_id: z.coerce.number().int().positive('Выберите поставщика'),
+  // Завод-производитель (необязательно): с какого завода пришёл цемент.
+  factory_id: z.coerce.number().int().positive().optional().nullable(),
   cement_mark_id: z.coerce.number().int().positive('Выберите марку цемента'),
   packaging: z.enum(PACKAGING_TYPES),
   tonnage: z.coerce.number().positive('Тоннаж должен быть больше нуля'),

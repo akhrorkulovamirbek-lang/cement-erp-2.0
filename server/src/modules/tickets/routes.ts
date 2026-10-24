@@ -22,8 +22,9 @@ ticketsRouter.get(
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
-      `SELECT t.*, z.name AS zavod_name, cm.name AS cement_mark_name
+      `SELECT t.*, z.name AS zavod_name, cm.name AS cement_mark_name, f.name AS factory_name
        FROM tickets t
+       LEFT JOIN factories f ON f.id = t.factory_id
        JOIN zavody z ON z.id = t.zavod_id
        JOIN cement_marks cm ON cm.id = t.cement_mark_id
        ${where}

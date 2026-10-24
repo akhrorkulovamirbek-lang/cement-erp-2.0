@@ -14,6 +14,7 @@ import { clientAdjustmentsRouter } from './modules/clientAdjustments/routes.js';
 import { cementMarksRouter } from './modules/cementMarks/routes.js';
 import { clientsRouter } from './modules/clients/routes.js';
 import { logisticsExpenseCategoriesRouter } from './modules/expenseCategories/routes.js';
+import { factoriesRouter } from './modules/factories/routes.js';
 import { importRouter } from './modules/import/routes.js';
 import { incomingRouter } from './modules/incoming/routes.js';
 import { logistsRouter } from './modules/logists/routes.js';
@@ -53,6 +54,7 @@ export function createApp() {
   // Справочники (Контрагенты)
   const refPermission = requirePermission('references');
   app.use('/api/zavody', refPermission, auditResource('zavod', { table: 'zavody', label: 'Завод', nameColumn: 'name' }), zavodyRouter);
+  app.use('/api/factories', refPermission, auditResource('factory', { table: 'factories', label: 'Завод-производитель', nameColumn: 'name' }), factoriesRouter);
   app.use('/api/clients', refPermission, auditResource('client', { table: 'clients', label: 'Клиент', nameColumn: 'name' }), clientsRouter);
   app.use(
     '/api/cement-marks',

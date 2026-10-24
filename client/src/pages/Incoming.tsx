@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { ApiError } from '@/api/client';
 import {
   cementMarksHooks,
+  factoriesHooks,
   clientsHooks,
   incomingHooks,
   machinesHooks,
@@ -36,6 +37,7 @@ import type { Client, Incoming, IncomingWarehouse, Ticket } from '@/types';
 interface FormValues {
   date: string;
   zavod_id: string;
+  factory_id: string;
   cement_mark_id: string;
   packaging: 'MESHOK' | 'NAVAL';
   tonnage: string;
@@ -55,6 +57,7 @@ interface FormValues {
 const emptyForm = (): FormValues => ({
   date: todayISO(),
   zavod_id: '',
+  factory_id: '',
   cement_mark_id: '',
   packaging: 'MESHOK',
   tonnage: '',
@@ -75,6 +78,7 @@ interface TicketFormValues {
   date: string;
   ticket_number: string;
   zavod_id: string;
+  factory_id: string;
   cement_mark_id: string;
   packaging: 'MESHOK' | 'NAVAL';
   tonnage: string;
@@ -85,6 +89,7 @@ const emptyTicketForm = (): TicketFormValues => ({
   date: todayISO(),
   ticket_number: '',
   zavod_id: '',
+  factory_id: '',
   cement_mark_id: '',
   packaging: 'MESHOK',
   tonnage: '',
@@ -100,12 +105,17 @@ interface ReplenishForm {
   description: string;
 }
 
+/** Завод-производитель необязателен: пустое значение или «не указан» — без завода. */
+const factoryValue = (v: string) => (v && v !== 'none' ? Number(v) : null);
+
 export function IncomingPage() {
   const { notify } = useToast();
 
   // Справочники, используемые по всей странице
   const zavody = zavodyHooks.useList();
   const cementMarks = cementMarksHooks.useList();
+  const factories = factoriesHooks.useList();
+  const factoryOptions = [{ value: 'none', label: '— не указан —' }, ...(factories.data ?? []).filter((f) => f.active).map((f) => ({ value: String(f.id), label: f.name }))];
   const clients = clientsHooks.useList();
   const machines = machinesHooks.useList();
   const balance = useWarehouseBalance();
@@ -156,6 +166,7 @@ export function IncomingPage() {
     reset({
       date: row.date,
       zavod_id: String(row.zavod_id),
+      factory_id: row.factory_id ? String(row.factory_id) : '',
       cement_mark_id: String(row.cement_mark_id),
       packaging: row.packaging,
       tonnage: row.tonnage,
@@ -180,6 +191,7 @@ export function IncomingPage() {
       date: data.date,
       warehouse,
       zavod_id: Number(data.zavod_id),
+      factory_id: factoryValue(data.factory_id),
       cement_mark_id: Number(data.cement_mark_id),
       packaging: data.packaging,
       tonnage: Number(data.tonnage),
@@ -239,7 +251,8 @@ export function IncomingPage() {
         return <Badge tone="slate">Факт</Badge>;
       },
     },
-    { key: 'zavod_name', header: 'Завод' },
+    { key: 'zavod_name', header: 'Поставщик' },
+    { key: 'factory_name', header: 'Завод', render: (r) => r.factory_name ?? '—' },
     { key: 'cement_mark_name', header: 'Марка' },
     {
       key: 'client_name',
@@ -317,6 +330,7 @@ export function IncomingPage() {
       date: t.date,
       ticket_number: t.ticket_number,
       zavod_id: String(t.zavod_id),
+      factory_id: t.factory_id ? String(t.factory_id) : '',
       cement_mark_id: String(t.cement_mark_id),
       packaging: t.packaging,
       tonnage: t.bought_tonnage,
@@ -335,6 +349,7 @@ export function IncomingPage() {
           data: {
             ticket_number: data.ticket_number,
             zavod_id: Number(data.zavod_id),
+            factory_id: factoryValue(data.factory_id),
             cement_mark_id: Number(data.cement_mark_id),
             price_per_ton: Number(data.price_per_ton),
           },
@@ -346,6 +361,7 @@ export function IncomingPage() {
           date: data.date,
           ticket_number: data.ticket_number,
           zavod_id: Number(data.zavod_id),
+          factory_id: factoryValue(data.factory_id),
           cement_mark_id: Number(data.cement_mark_id),
           packaging: data.packaging,
           tonnage: Number(data.tonnage),
@@ -386,7 +402,8 @@ export function IncomingPage() {
   const ticketColumns: Column<Ticket>[] = [
     { key: 'ticket_number', header: 'Номер', sortValue: (r) => r.ticket_number },
     { key: 'date', header: 'Дата', sortValue: (r) => r.date, render: (r) => formatDate(r.date) },
-    { key: 'zavod_name', header: 'Завод' },
+    { key: 'zavod_name', header: 'Поставщик' },
+    { key: 'factory_name', header: 'Завод', render: (r) => r.factory_name ?? '—' },
     { key: 'cement_mark_name', header: 'Марка' },
     { key: 'packaging', header: 'Упаковка', render: (r) => PACKAGING_LABELS[r.packaging] },
     {
@@ -467,8 +484,8 @@ export function IncomingPage() {
           value={zavodFilter}
           onValueChange={setZavodFilter}
           className="w-full sm:w-48"
-          placeholder="Все заводы"
-          options={[{ value: '', label: 'Все заводы' }, ...(zavody.data ?? []).map((z) => ({ value: String(z.id), label: z.name }))]}
+          placeholder="Все поставщики"
+          options={[{ value: '', label: 'Все поставщики' }, ...(zavody.data ?? []).map((z) => ({ value: String(z.id), label: z.name }))]}
         />
       </FilterBar>
       <DataTable footer={incomingFooter} columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} onEdit={openEdit} onDelete={setDeleting} />
@@ -564,12 +581,15 @@ export function IncomingPage() {
               <FormRow label="Номер тикета" error={ticketForm.formState.errors.ticket_number?.message}>
                 <Input {...ticketForm.register('ticket_number', { required: 'Укажите номер' })} placeholder="Cesam-001" />
               </FormRow>
-              <FormRow label="Завод" error={ticketForm.formState.errors.zavod_id?.message}>
+              <FormRow label="Поставщик" error={ticketForm.formState.errors.zavod_id?.message}>
                 <RHFSelect
                   control={ticketForm.control}
                   name="zavod_id"
                   options={(zavody.data ?? []).map((z) => ({ value: String(z.id), label: z.name }))}
                 />
+              </FormRow>
+              <FormRow label="Завод (необязательно)">
+                <RHFSelect control={ticketForm.control} name="factory_id" options={factoryOptions} />
               </FormRow>
               <FormRow label="Марка цемента" error={ticketForm.formState.errors.cement_mark_id?.message}>
                 <RHFSelect
@@ -603,8 +623,11 @@ export function IncomingPage() {
               <FormRow label="Дата">
                 <Input type="date" {...register('date', { required: true })} />
               </FormRow>
-              <FormRow label="Завод" error={formState.errors.zavod_id?.message}>
+              <FormRow label="Поставщик" error={formState.errors.zavod_id?.message}>
                 <RHFSelect control={control} name="zavod_id" options={(zavody.data ?? []).map((z) => ({ value: String(z.id), label: z.name }))} />
+              </FormRow>
+              <FormRow label="Завод (необязательно)">
+                <RHFSelect control={control} name="factory_id" options={factoryOptions} />
               </FormRow>
               <FormRow label="Марка цемента" error={formState.errors.cement_mark_id?.message}>
                 <RHFSelect
@@ -739,8 +762,11 @@ export function IncomingPage() {
             <FormRow label="Номер тикета" error={ticketForm.formState.errors.ticket_number?.message}>
               <Input {...ticketForm.register('ticket_number', { required: 'Укажите номер' })} />
             </FormRow>
-            <FormRow label="Завод" error={ticketForm.formState.errors.zavod_id?.message}>
+            <FormRow label="Поставщик" error={ticketForm.formState.errors.zavod_id?.message}>
               <RHFSelect control={ticketForm.control} name="zavod_id" options={(zavody.data ?? []).map((z) => ({ value: String(z.id), label: z.name }))} />
+            </FormRow>
+            <FormRow label="Завод (необязательно)">
+              <RHFSelect control={ticketForm.control} name="factory_id" options={factoryOptions} />
             </FormRow>
             <FormRow label="Марка цемента" error={ticketForm.formState.errors.cement_mark_id?.message}>
               <RHFSelect

@@ -24,6 +24,7 @@ import type {
   ClientBalance,
   DebtsSummary,
   ExpenseCategory,
+  Factory,
   Incoming,
   Logist,
   LogistDetailData,
@@ -53,6 +54,7 @@ const REPORT_KEYS = [
 // TInput разрешает числа/булевы, где ответ API (T) хранит их как строки NUMERIC из Postgres —
 // не переиспользуем сам T как тип формы записи.
 export const zavodyHooks = createCrudHooks<Zavod, Record<string, unknown>>('zavody', '/zavody');
+export const factoriesHooks = createCrudHooks<Factory, Record<string, unknown>>('factories', '/factories', ['incoming', 'tickets']);
 export const clientsHooks = createCrudHooks<Client, Record<string, unknown>>('clients', '/clients');
 export const cementMarksHooks = createCrudHooks<CementMark, Record<string, unknown>>('cement-marks', '/cement-marks');
 export const machinesHooks = createCrudHooks<Machine, Record<string, unknown>>('machines', '/machines');
