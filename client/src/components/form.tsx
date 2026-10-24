@@ -10,7 +10,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
+import { SearchSelect } from './SearchSelect';
+
 export { Input } from '@/components/ui/input';
+
+/** Списки длиннее этого порога получают строку поиска. */
+const SEARCH_THRESHOLD = 6;
 
 export function FormRow({
   label,
@@ -54,6 +59,9 @@ export function PlainSelect({
   placeholder?: string;
   className?: string;
 }) {
+  if (options.length > SEARCH_THRESHOLD) {
+    return <SearchSelect value={value} onValueChange={onValueChange} options={options} placeholder={placeholder} className={className} />;
+  }
   return (
     <UiSelect value={value === '' ? ALL_SENTINEL : value} onValueChange={(v) => onValueChange(v === ALL_SENTINEL ? '' : v)}>
       <SelectTrigger className={className}>
@@ -89,7 +97,17 @@ export function RHFSelect<T extends FieldValues>({
     <Controller
       control={control}
       name={name}
-      render={({ field }) => (
+      render={({ field }) =>
+        options.length > SEARCH_THRESHOLD ? (
+          <SearchSelect
+            value={field.value ? String(field.value) : ''}
+            onValueChange={field.onChange}
+            options={options}
+            placeholder={placeholder}
+            disabled={disabled}
+            className={className}
+          />
+        ) : (
         <UiSelect value={field.value ? String(field.value) : ''} onValueChange={field.onChange} disabled={disabled}>
           <SelectTrigger className={className ?? 'w-full'}>
             <SelectValue placeholder={placeholder} />
@@ -102,7 +120,8 @@ export function RHFSelect<T extends FieldValues>({
             ))}
           </SelectContent>
         </UiSelect>
-      )}
+        )
+      }
     />
   );
 }
