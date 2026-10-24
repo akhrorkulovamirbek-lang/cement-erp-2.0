@@ -12,7 +12,13 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
         "aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
         className
       )}
+      // Колёсико мыши над полем с числом (цена, тонны) не должно менять значение — снимаем фокус,
+      // и колесо прокручивает страницу.
       {...props}
+      onWheel={(e) => {
+        if (type === "number") e.currentTarget.blur()
+        props.onWheel?.(e)
+      }}
     />
   )
 }
