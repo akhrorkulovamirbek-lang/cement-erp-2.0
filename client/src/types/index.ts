@@ -298,6 +298,7 @@ export interface CashExpense {
 
 export interface ClientBalance {
   id: number;
+  machines: string[];
   name: string;
   phone: string | null;
   purchased: string;

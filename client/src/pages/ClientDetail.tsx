@@ -366,6 +366,42 @@ export function ClientDetail() {
     }
   }
 
+  // Машины клиента: на каких номерах ему возили цемент — по его продажам.
+  type MachineRow = { plate: string; carrier: string; trips: number; tonnage: number; last: string };
+  const machineRows: MachineRow[] = (() => {
+    const map = new Map<string, MachineRow>();
+    for (const r of sales.data ?? []) {
+      const plate = (r.machine_number ?? r.own_vehicle_number ?? '').replace(/\s+/g, '').toUpperCase();
+      if (!plate) continue;
+      const row = map.get(plate) ?? { plate, carrier: '', trips: 0, tonnage: 0, last: '' };
+      row.trips += 1;
+      row.tonnage += Number(r.tonnage);
+      if (r.carrier_name && !row.carrier.toLowerCase().includes(r.carrier_name.trim().toLowerCase())) {
+        row.carrier = row.carrier ? `${row.carrier}, ${r.carrier_name.trim()}` : r.carrier_name.trim();
+      }
+      if (r.date > row.last) row.last = r.date;
+      map.set(plate, row);
+    }
+    return [...map.values()].sort((a, b) => b.last.localeCompare(a.last));
+  })();
+
+  const machineColumns: Column<MachineRow>[] = [
+    {
+      key: 'plate',
+      header: 'Госномер',
+      sortValue: (r) => r.plate,
+      render: (r) => (
+        <Link to={`/vehicles/${encodeURIComponent(r.plate)}`} className="font-medium text-primary hover:underline">
+          {r.plate}
+        </Link>
+      ),
+    },
+    { key: 'carrier', header: 'Перевозчик', render: (r) => r.carrier || '—' },
+    { key: 'trips', header: 'Рейсов', align: 'right', sortValue: (r) => r.trips },
+    { key: 'tonnage', header: 'Тонн', align: 'right', sortValue: (r) => r.tonnage, render: (r) => `${formatNumber(r.tonnage, 2)} т` },
+    { key: 'last', header: 'Последний рейс', sortValue: (r) => r.last, render: (r) => formatDate(r.last) },
+  ];
+
   const salesColumns: Column<Sale>[] = [
     { key: 'date', header: 'Дата', sortValue: (r) => r.date, render: (r) => formatDate(r.date) },
     {
@@ -517,6 +553,17 @@ export function ClientDetail() {
           label={Number(balance?.balance ?? 0) < 0 ? 'Мы должны ему (переплата / поставки)' : 'Текущий долг'}
           value={formatMoney(Math.abs(Number(balance?.balance ?? 0)))}
           tone={Number(balance?.balance ?? 0) > 0 ? 'negative' : 'positive'}
+        />
+      </div>
+
+      <h2 className="mb-2 text-sm font-semibold">Машины клиента</h2>
+      <div className="mb-6">
+        <DataTable
+          columns={machineColumns}
+          rows={machineRows}
+          loading={sales.isLoading}
+          getRowId={(r) => r.plate}
+          emptyMessage="Машин пока нет — они появятся из продаж"
         />
       </div>
 
