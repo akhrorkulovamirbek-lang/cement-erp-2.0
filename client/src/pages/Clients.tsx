@@ -33,7 +33,6 @@ function parseClientLine(raw: string): { label: string; payload: Record<string, 
 }
 
 interface Row extends Client {
-  machines: string[];
   purchased: string;
   paid: string;
   balance: string;
@@ -68,7 +67,7 @@ export function Clients() {
   const balanceMap = new Map<number, ClientBalance>((balances.data ?? []).map((b) => [b.id, b]));
   const rows: Row[] = (list.data ?? []).map((c) => {
     const b = balanceMap.get(c.id);
-    return { ...c, machines: b?.machines ?? [], purchased: b?.purchased ?? '0', paid: b?.paid ?? '0', balance: b?.balance ?? '0' };
+    return { ...c, purchased: b?.purchased ?? '0', paid: b?.paid ?? '0', balance: b?.balance ?? '0' };
   });
 
   function openNew() {
@@ -141,24 +140,6 @@ export function Clients() {
       ),
     },
     { key: 'phone', header: 'Телефон', render: (r) => r.phone || '—' },
-    {
-      key: 'machines',
-      header: 'Машины',
-      render: (r) => {
-        const plates = r.machines ?? [];
-        if (plates.length === 0) return '—';
-        return (
-          <span className="inline-flex flex-wrap gap-x-2">
-            {plates.slice(0, 3).map((p) => (
-              <Link key={p} to={`/vehicles/${encodeURIComponent(p)}`} className="text-primary hover:underline">
-                {p}
-              </Link>
-            ))}
-            {plates.length > 3 && <span className="text-muted-foreground">ещё {plates.length - 3}</span>}
-          </span>
-        );
-      },
-    },
     {
       key: 'purchased',
       header: 'Куплено',

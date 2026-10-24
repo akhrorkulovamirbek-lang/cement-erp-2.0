@@ -116,16 +116,7 @@ reportsRouter.get(
       `SELECT c.id, c.name, c.phone,
               c.initial_debt + COALESCE(sales_total.total, 0) + COALESCE(adj_plus.total, 0) AS purchased,
               COALESCE(paid_total.total, 0) AS paid,
-              c.initial_debt + COALESCE(sales_total.total, 0) + COALESCE(adj_plus.total, 0) - COALESCE(paid_total.total, 0) AS balance,
-              -- Номера машин, на которых клиенту возили цемент (из его продаж), для колонки «Машины».
-              COALESCE((
-                SELECT json_agg(x.p ORDER BY x.p) FROM (
-                  SELECT DISTINCT replace(upper(COALESCE(s2.machine_number, ov.number)), ' ', '') AS p
-                  FROM sales s2 LEFT JOIN machines ov ON ov.id = s2.own_vehicle_id
-                  WHERE s2.client_id = c.id AND COALESCE(s2.machine_number, ov.number) IS NOT NULL
-                    AND btrim(COALESCE(s2.machine_number, ov.number)) <> ''
-                ) x
-              ), '[]'::json) AS machines
+              c.initial_debt + COALESCE(sales_total.total, 0) + COALESCE(adj_plus.total, 0) - COALESCE(paid_total.total, 0) AS balance
        FROM clients c
        LEFT JOIN (
          SELECT client_id, SUM(${UZS_SALE}) AS total FROM sales s WHERE client_id IS NOT NULL GROUP BY client_id
