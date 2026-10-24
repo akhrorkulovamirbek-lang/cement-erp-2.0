@@ -26,7 +26,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { SuggestInput } from '@/components/SuggestInput';
 import { QuickAddClient } from '@/components/QuickAddClient';
 import { SidePanel } from '@/components/SidePanel';
-import { FormRow, Input, PlainSelect, RHFSelect } from '@/components/form';
+import { FormRow, Input, PlainSelect, RHFCheckbox, RHFSelect } from '@/components/form';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { PACKAGING_OPTIONS, VEHICLE_TYPE_OPTIONS, WAREHOUSE_OPTIONS, PACKAGING_LABELS } from '@/lib/constants';
@@ -38,6 +38,8 @@ interface FormValues {
   date: string;
   zavod_id: string;
   factory_id: string;
+  direct_sale: boolean;
+  buyer_client_id: string;
   cement_mark_id: string;
   packaging: 'MESHOK' | 'NAVAL';
   tonnage: string;
@@ -58,6 +60,8 @@ const emptyForm = (): FormValues => ({
   date: todayISO(),
   zavod_id: '',
   factory_id: '',
+  direct_sale: false,
+  buyer_client_id: '',
   cement_mark_id: '',
   packaging: 'MESHOK',
   tonnage: '',
@@ -167,6 +171,8 @@ export function IncomingPage() {
       date: row.date,
       zavod_id: String(row.zavod_id),
       factory_id: row.factory_id ? String(row.factory_id) : '',
+      direct_sale: row.warehouse === 'CLIENT_GOODS' && row.linked_sale_id != null,
+      buyer_client_id: '',
       cement_mark_id: String(row.cement_mark_id),
       packaging: row.packaging,
       tonnage: row.tonnage,
@@ -203,14 +209,17 @@ export function IncomingPage() {
       machine_number: data.machine_number || null,
       comment: data.comment || null,
       client_id: warehouse === 'DIRECT' || warehouse === 'CLIENT_GOODS' ? Number(data.client_id) : null,
-      sale_price_per_ton: warehouse === 'DIRECT' ? Number(data.sale_price_per_ton) : null,
-      vehicle_type: warehouse === 'DIRECT' ? data.vehicle_type || null : null,
-      own_vehicle_id: warehouse === 'DIRECT' && data.vehicle_type === 'OWN' ? Number(data.own_vehicle_id) : null,
-      sale_machine_number: warehouse === 'DIRECT' && data.vehicle_type !== 'OWN' ? data.sale_machine_number : null,
-      carrier_name: warehouse === 'DIRECT' && data.vehicle_type === 'HIRED' ? data.carrier_name : null,
+      // Взаимозачёт с продажей «Напрямую»: цемент от клиента/поставщика сразу уходит другому клиенту.
+      direct_sale: warehouse === 'CLIENT_GOODS' && data.direct_sale,
+      buyer_client_id: warehouse === 'CLIENT_GOODS' && data.direct_sale ? Number(data.buyer_client_id) : null,
+      sale_price_per_ton: sellDirect ? Number(data.sale_price_per_ton) : null,
+      vehicle_type: sellDirect ? data.vehicle_type || null : null,
+      own_vehicle_id: sellDirect && data.vehicle_type === 'OWN' ? Number(data.own_vehicle_id) : null,
+      sale_machine_number: sellDirect && data.vehicle_type !== 'OWN' ? data.sale_machine_number : null,
+      carrier_name: sellDirect && data.vehicle_type === 'HIRED' ? data.carrier_name : null,
       freight_price_per_ton:
-        warehouse === 'DIRECT' && data.vehicle_type !== 'CLIENT' ? Number(data.freight_price_per_ton) : null,
-      hire_price_per_ton: warehouse === 'DIRECT' && data.vehicle_type === 'HIRED' ? Number(data.hire_price_per_ton) : null,
+        sellDirect && data.vehicle_type !== 'CLIENT' ? Number(data.freight_price_per_ton) : null,
+      hire_price_per_ton: sellDirect && data.vehicle_type === 'HIRED' ? Number(data.hire_price_per_ton) : null,
     };
     try {
       if (editing === 'new') {
@@ -448,6 +457,8 @@ export function IncomingPage() {
       ? `${warehouse === 'DIRECT' ? 'Напрямую' : 'Факт'} · ${cementMarks.data?.find((m) => String(m.id) === watch('cement_mark_id'))?.name ?? ''} · ${PACKAGING_LABELS[watch('packaging')]} · ${formatNumber(watch('tonnage') || 0, 3)} т`
       : '';
 
+  const directSaleWatch = watch('direct_sale');
+  const sellDirect = warehouse === 'DIRECT' || (warehouse === 'CLIENT_GOODS' && directSaleWatch);
   const incomingRows = list.data ?? [];
   // Итоги по приходам, что сейчас показаны в истории (с учётом периода и фильтров).
   const incomingFooter: ReactNode[] = columns.map((col) => {
@@ -664,19 +675,23 @@ export function IncomingPage() {
 
               {warehouse === 'CLIENT_GOODS' && (
                 <div className="space-y-2 rounded-md bg-muted p-3">
-                  <FormRow label="Клиент" error={formState.errors.client_id?.message}>
+                  <FormRow label="Клиент/поставщик, который отдаёт цемент" error={formState.errors.client_id?.message}>
                     <RHFSelect control={control} name="client_id" options={clientOptions} />
                   </FormRow>
                   <QuickAddClient onCreated={selectClient} />
+                  <RHFCheckbox control={control} name="direct_sale" label="Этот цемент сразу продаётся другому клиенту (напрямую, без склада)" />
                 </div>
               )}
 
-              {warehouse === 'DIRECT' && (
+              {sellDirect && (
                 <div className="space-y-4 rounded-md bg-muted p-3">
-                  <FormRow label="Клиент" error={formState.errors.client_id?.message}>
+                  <FormRow
+                    label={warehouse === 'DIRECT' ? 'Клиент' : 'Кому продаём (клиент-покупатель)'}
+                    error={warehouse === 'DIRECT' ? formState.errors.client_id?.message : formState.errors.buyer_client_id?.message}
+                  >
                     <RHFSelect
                       control={control}
-                      name="client_id"
+                      name={warehouse === 'DIRECT' ? 'client_id' : 'buyer_client_id'}
                       options={clientOptions}
                     />
                     <div className="mt-1">

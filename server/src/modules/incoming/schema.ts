@@ -18,6 +18,9 @@ const baseIncomingSchema = z.object({
 
   // Только для warehouse = 'DIRECT' (раздел 2 ТЗ, пункты 10-13):
   client_id: z.coerce.number().int().positive().optional().nullable(),
+  // Для warehouse = 'CLIENT_GOODS': цемент от клиента/поставщика сразу продаётся другому клиенту (без склада).
+  direct_sale: z.coerce.boolean().default(false),
+  buyer_client_id: z.coerce.number().int().positive().optional().nullable(),
   sale_price_per_ton: z.coerce.number().positive().optional().nullable(),
   vehicle_type: vehicleTypeEnum.optional().nullable(),
   own_vehicle_id: z.coerce.number().int().positive().optional().nullable(),
@@ -30,11 +33,13 @@ const baseIncomingSchema = z.object({
 export const incomingSchema = baseIncomingSchema.superRefine((data, ctx) => {
   if (data.warehouse === 'CLIENT_GOODS') {
     if (!data.client_id) ctx.addIssue({ code: 'custom', path: ['client_id'], message: 'Выберите клиента' });
+    if (!data.direct_sale) return;
+    if (!data.buyer_client_id) ctx.addIssue({ code: 'custom', path: ['buyer_client_id'], message: 'Выберите клиента-покупателя' });
+  } else if (data.warehouse !== 'DIRECT') {
     return;
+  } else if (!data.client_id) {
+    ctx.addIssue({ code: 'custom', path: ['client_id'], message: 'Выберите клиента' });
   }
-  if (data.warehouse !== 'DIRECT') return;
-
-  if (!data.client_id) ctx.addIssue({ code: 'custom', path: ['client_id'], message: 'Выберите клиента' });
   if (!data.sale_price_per_ton) {
     ctx.addIssue({ code: 'custom', path: ['sale_price_per_ton'], message: 'Укажите цену продажи' });
   }

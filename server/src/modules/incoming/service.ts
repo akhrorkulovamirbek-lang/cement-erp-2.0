@@ -7,6 +7,12 @@ import type { incomingSchema } from './schema.js';
 
 type IncomingInput = z.infer<typeof incomingSchema>;
 
+/** Продажа «Напрямую»: либо приход-Напрямую, либо взаимозачёт (цемент от клиента/поставщика), который
+ * сразу уходит другому клиенту. В обоих случаях склад не меняется, а к приходу привязана продажа. */
+const isDirectSale = (data: IncomingInput) => data.warehouse === 'DIRECT' || (data.warehouse === 'CLIENT_GOODS' && data.direct_sale);
+/** Кому продали: в «Напрямую» это client_id, во взаимозачёте client_id — тот, кто отдал цемент. */
+const buyerOf = (data: IncomingInput) => (data.warehouse === 'DIRECT' ? data.client_id : data.buyer_client_id);
+
 async function insertLinkedSale(client: pg.PoolClient, incomingId: number, data: IncomingInput) {
   const freightTotal = computeFreightTotal(data.vehicle_type!, data.tonnage, data.freight_price_per_ton);
   const saleTotal = data.tonnage * data.sale_price_per_ton! + freightTotal;
@@ -19,7 +25,7 @@ async function insertLinkedSale(client: pg.PoolClient, incomingId: number, data:
      VALUES ($1,'CEMENT',$2,'direct',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
     [
       data.date,
-      data.client_id,
+      buyerOf(data),
       data.zavod_id,
       data.cement_mark_id,
       data.packaging,
@@ -55,7 +61,7 @@ async function updateLinkedSale(client: pg.PoolClient, saleId: number, incomingI
      WHERE id=$20`,
     [
       data.date,
-      data.client_id,
+      buyerOf(data),
       data.zavod_id,
       data.cement_mark_id,
       data.packaging,
@@ -100,7 +106,7 @@ export async function createIncoming(client: pg.PoolClient, data: IncomingInput)
   );
   const incoming = rows[0];
 
-  if (data.warehouse === 'DIRECT') {
+  if (isDirectSale(data)) {
     const saleId = await insertLinkedSale(client, incoming.id, data);
     await client.query('UPDATE incoming SET linked_sale_id = $1 WHERE id = $2', [saleId, incoming.id]);
     incoming.linked_sale_id = saleId;
@@ -141,8 +147,8 @@ export async function updateIncoming(client: pg.PoolClient, id: number, data: In
   );
   const updated = rows[0];
 
-  const wasDirect = existing.warehouse === 'DIRECT';
-  const isDirect = data.warehouse === 'DIRECT';
+  const wasDirect = existing.warehouse === 'DIRECT' || existing.linked_sale_id != null;
+  const isDirect = isDirectSale(data);
 
   if (wasDirect && isDirect && existing.linked_sale_id) {
     await updateLinkedSale(client, existing.linked_sale_id, id, data);
@@ -176,7 +182,7 @@ export async function deleteIncoming(client: pg.PoolClient, id: number) {
   const deleted = rows[0];
   if (!deleted) throw notFound('Приход не найден');
 
-  if (deleted.warehouse === 'DIRECT' && deleted.linked_sale_id) {
+  if (deleted.linked_sale_id) {
     await client.query('UPDATE incoming SET linked_sale_id = NULL WHERE id = $1', [id]);
     await client.query('DELETE FROM sales WHERE id = $1', [deleted.linked_sale_id]);
   }
