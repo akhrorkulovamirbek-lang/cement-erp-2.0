@@ -475,8 +475,8 @@ export function ClientDetail() {
         <StatCard label="Куплено всего" value={formatMoney(balance?.purchased ?? 0)} />
         <StatCard label="Оплачено всего" value={formatMoney(balance?.paid ?? 0)} />
         <StatCard
-          label="Текущий долг"
-          value={formatMoney(balance?.balance ?? 0)}
+          label={Number(balance?.balance ?? 0) < 0 ? 'Переплата (мы должны клиенту)' : 'Текущий долг'}
+          value={formatMoney(Math.abs(Number(balance?.balance ?? 0)))}
           tone={Number(balance?.balance ?? 0) > 0 ? 'negative' : 'positive'}
         />
       </div>

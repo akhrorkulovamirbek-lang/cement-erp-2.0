@@ -142,7 +142,7 @@ reportsRouter.get(
          LEFT JOIN (SELECT client_id, SUM(${UZS_SALE}) AS total FROM sales s WHERE client_id IS NOT NULL GROUP BY client_id) s ON s.client_id = c.id
          LEFT JOIN (${CLIENT_ADJ_PLUS_SUBQUERY}) a ON a.client_id = c.id
          LEFT JOIN (${CLIENT_PAID_SUBQUERY}) p ON p.client_id = c.id
-         WHERE c.initial_debt + COALESCE(s.total, 0) + COALESCE(a.total, 0) - COALESCE(p.total, 0) > 0
+         WHERE c.initial_debt + COALESCE(s.total, 0) + COALESCE(a.total, 0) - COALESCE(p.total, 0) <> 0
          ORDER BY balance DESC`,
       ),
       pool.query(
@@ -150,7 +150,7 @@ reportsRouter.get(
          FROM zavody z
          LEFT JOIN (SELECT zavod_id, SUM(total_sum) AS total FROM incoming WHERE ${ZAVOD_PURCHASED_EXCLUDE_CLIENT_GOODS} GROUP BY zavod_id) i ON i.zavod_id = z.id
          LEFT JOIN (SELECT zavod_id, SUM(${UZS_EXPENSE}) AS total FROM cash_expense WHERE zavod_id IS NOT NULL AND category = 'цемент' GROUP BY zavod_id) p ON p.zavod_id = z.id
-         WHERE z.initial_debt + COALESCE(i.total, 0) - COALESCE(p.total, 0) > 0
+         WHERE z.initial_debt + COALESCE(i.total, 0) - COALESCE(p.total, 0) <> 0
          ORDER BY balance DESC`,
       ),
       pool.query(
@@ -163,19 +163,31 @@ reportsRouter.get(
            FROM cash_expense WHERE category = 'перевозчик' AND carrier_name IS NOT NULL GROUP BY carrier_name
          ) t
          GROUP BY carrier_name
-         HAVING SUM(owed) - SUM(paid) > 0
+         HAVING SUM(owed) - SUM(paid) <> 0
          ORDER BY balance DESC`,
       ),
     ]);
 
+    // Баланс > 0 — должны нам (клиент) / мы должны (завод, перевозчик); < 0 — переплата в обратную
+    // сторону: клиент заплатил вперёд (мы должны ему), завод или перевозчик получил больше, чем
+    // начислено (они должны нам). Раньше такие строки отбрасывались и нигде не показывались.
+    const debt = (rows: { balance: string }[]) => rows.filter((r) => Number(r.balance) > 0);
+    const over = (rows: { balance: string }[]) =>
+      rows.filter((r) => Number(r.balance) < 0).map((r) => ({ ...r, balance: String(-Number(r.balance)) })).sort((a, b) => Number(b.balance) - Number(a.balance));
     const sum = (rows: { balance: string }[]) => rows.reduce((s, r) => s + Number(r.balance), 0);
     res.json({
-      clientDebtTotal: sum(clients.rows),
-      zavodDebtTotal: sum(zavody.rows),
-      carrierDebtTotal: sum(carriers.rows),
-      topClients: clients.rows.slice(0, 5),
-      topZavody: zavody.rows.slice(0, 5),
-      topCarriers: carriers.rows.slice(0, 5),
+      clientDebtTotal: sum(debt(clients.rows)),
+      zavodDebtTotal: sum(debt(zavody.rows)),
+      carrierDebtTotal: sum(debt(carriers.rows)),
+      topClients: debt(clients.rows).slice(0, 5),
+      topZavody: debt(zavody.rows).slice(0, 5),
+      topCarriers: debt(carriers.rows).slice(0, 5),
+      clientOverpaidTotal: sum(over(clients.rows)),
+      zavodOverpaidTotal: sum(over(zavody.rows)),
+      carrierOverpaidTotal: sum(over(carriers.rows)),
+      topClientsOverpaid: over(clients.rows).slice(0, 5),
+      topZavodyOverpaid: over(zavody.rows).slice(0, 5),
+      topCarriersOverpaid: over(carriers.rows).slice(0, 5),
     });
   }),
 );
@@ -279,6 +291,27 @@ reportsRouter.get(
        FROM hired h LEFT JOIN hired_cost hc ON hc.label = h.label
        ORDER BY margin DESC`,
       [from, to],
+    );
+    res.json(rows);
+  }),
+);
+
+// Отчёт «Перевозчики»: по каждому — начислено за наёмные рейсы, выплачено, баланс. balance > 0 —
+// мы должны перевозчику, balance < 0 — переплата, перевозчик должен нам.
+reportsRouter.get(
+  '/carriers',
+  asyncHandler(async (_req, res) => {
+    const { rows } = await pool.query(
+      `SELECT carrier_name AS name, SUM(owed) AS owed, SUM(paid) AS paid, SUM(owed) - SUM(paid) AS balance
+       FROM (
+         SELECT carrier_name, SUM(tonnage * hire_price_per_ton) AS owed, 0 AS paid
+         FROM sales WHERE vehicle_type = 'HIRED' AND carrier_name IS NOT NULL GROUP BY carrier_name
+         UNION ALL
+         SELECT carrier_name, 0 AS owed, SUM(${UZS_EXPENSE}) AS paid
+         FROM cash_expense WHERE category = 'перевозчик' AND carrier_name IS NOT NULL GROUP BY carrier_name
+       ) t
+       GROUP BY carrier_name
+       ORDER BY balance DESC`,
     );
     res.json(rows);
   }),

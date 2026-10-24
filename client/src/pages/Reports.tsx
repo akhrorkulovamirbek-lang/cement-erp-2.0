@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   useCashServiceSummary,
+  useCarriersReport,
   useCementReport,
   useClientBalances,
   useVehiclesReport,
@@ -15,7 +16,7 @@ import { StatCard } from '@/components/StatCard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PACKAGING_LABELS } from '@/lib/constants';
 import { formatMoney, formatNumber } from '@/lib/format';
-import type { CementReportRow, ClientBalance, VehicleReportRow, ZavodBalance } from '@/types';
+import type { CarrierBalance, CementReportRow, ClientBalance, VehicleReportRow, ZavodBalance } from '@/types';
 
 /** Раздел «Отчёты» — пять готовых разрезов, не конструктор (см. контекст плана): владелец
  * подтвердил, что нужны конкретные готовые срезы с фильтром периода, а не гибкая сборка полей. */
@@ -29,6 +30,7 @@ export function Reports() {
           <TabsTrigger value="vehicles">Логистика</TabsTrigger>
           <TabsTrigger value="clients">Клиенты</TabsTrigger>
           <TabsTrigger value="zavody">Заводы</TabsTrigger>
+          <TabsTrigger value="carriers">Перевозчики</TabsTrigger>
           <TabsTrigger value="cash-service">Обналичивание</TabsTrigger>
         </TabsList>
 
@@ -43,6 +45,9 @@ export function Reports() {
         </TabsContent>
         <TabsContent value="zavody" className="mt-4">
           <ZavodyTab />
+        </TabsContent>
+        <TabsContent value="carriers" className="mt-4">
+          <CarriersTab />
         </TabsContent>
         <TabsContent value="cash-service" className="mt-4">
           <CashServiceTab />
@@ -248,7 +253,8 @@ function ClientsTab() {
       sortValue: (r) => Number(r.balance),
       render: (r) => {
         const n = Number(r.balance);
-        if (n <= 0) return <Badge tone="green">Без долга</Badge>;
+        if (n === 0) return <Badge tone="green">Без долга</Badge>;
+        if (n < 0) return <Badge tone="amber">Переплата {formatMoney(-n)}</Badge>;
         return <span className="font-semibold text-destructive">{formatMoney(n)}</span>;
       },
     },
@@ -278,6 +284,52 @@ function ClientsTab() {
         <span key="balance" className={totals.balance > 0 ? 'font-semibold text-destructive' : 'font-semibold'}>
           {formatMoney(totals.balance)}
         </span>,
+      ]}
+    />
+  );
+}
+
+/** Перевозчики: начислено за наёмные рейсы, выплачено, баланс. Минус в балансе — переплата:
+ * перевозчик получил больше, чем начислено, и теперь должен нам. */
+function CarriersTab() {
+  const report = useCarriersReport();
+  const rows = report.data ?? [];
+
+  const columns: Column<CarrierBalance>[] = [
+    { key: 'name', header: 'Перевозчик', sortValue: (r) => r.name },
+    { key: 'owed', header: 'Начислено за рейсы', align: 'right', sortValue: (r) => Number(r.owed), render: (r) => formatMoney(r.owed) },
+    { key: 'paid', header: 'Выплачено', align: 'right', sortValue: (r) => Number(r.paid), render: (r) => formatMoney(r.paid) },
+    {
+      key: 'balance',
+      header: 'Баланс',
+      align: 'right',
+      sortValue: (r) => Number(r.balance),
+      render: (r) => {
+        const n = Number(r.balance);
+        if (n === 0) return <Badge tone="green">Рассчитались</Badge>;
+        if (n < 0) return <span className="font-semibold text-emerald-600">Должен нам {formatMoney(-n)}</span>;
+        return <span className="font-semibold text-destructive">Мы должны {formatMoney(n)}</span>;
+      },
+    },
+  ];
+
+  const totals = rows.reduce(
+    (acc, r) => ({ owed: acc.owed + Number(r.owed), paid: acc.paid + Number(r.paid), balance: acc.balance + Number(r.balance) }),
+    { owed: 0, paid: 0, balance: 0 },
+  );
+
+  return (
+    <DataTable
+      columns={columns}
+      rows={rows}
+      loading={report.isLoading}
+      getRowId={(r) => r.name}
+      emptyMessage="Перевозчиков пока нет"
+      footer={[
+        'Итого',
+        formatMoney(totals.owed),
+        formatMoney(totals.paid),
+        totals.balance < 0 ? `Должны нам ${formatMoney(-totals.balance)}` : `Мы должны ${formatMoney(totals.balance)}`,
       ]}
     />
   );
@@ -318,7 +370,8 @@ function ZavodyTab() {
       sortValue: (r) => Number(r.balance),
       render: (r) => {
         const n = Number(r.balance);
-        if (n <= 0) return <Badge tone="green">Долга нет</Badge>;
+        if (n === 0) return <Badge tone="green">Долга нет</Badge>;
+        if (n < 0) return <span className="font-semibold text-emerald-600">Должен нам {formatMoney(-n)}</span>;
         return <span className="font-semibold text-destructive">{formatMoney(n)}</span>;
       },
     },

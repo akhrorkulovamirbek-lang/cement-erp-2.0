@@ -155,7 +155,8 @@ export function Clients() {
       sortValue: (r) => Number(r.balance),
       render: (r) => {
         const n = Number(r.balance);
-        if (n <= 0) return <Badge tone="green">Без долга</Badge>;
+        if (n === 0) return <Badge tone="green">Без долга</Badge>;
+        if (n < 0) return <Badge tone="amber">Переплата {formatMoney(-n)}</Badge>;
         return <span className="font-semibold text-destructive">{formatMoney(n)}</span>;
       },
     },

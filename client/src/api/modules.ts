@@ -43,6 +43,7 @@ const REPORT_KEYS = [
   'report-debts-summary',
   'report-cash-balances',
   'carrier-balances',
+  'report-carriers',
 ];
 
 // TInput разрешает числа/булевы, где ответ API (T) хранит их как строки NUMERIC из Postgres —
@@ -192,6 +193,13 @@ export function useCarrierBalances() {
   return useQuery({
     queryKey: ['carrier-balances'],
     queryFn: () => api.get<CarrierBalance[]>('/cash-expense/carrier-balances'),
+  });
+}
+
+export function useCarriersReport() {
+  return useQuery({
+    queryKey: ['report-carriers'],
+    queryFn: () => api.get<CarrierBalance[]>('/report/carriers'),
   });
 }
 

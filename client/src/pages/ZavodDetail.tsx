@@ -116,8 +116,8 @@ export function ZavodDetail() {
         <StatCard label="Куплено всего (прямые приходы)" value={formatMoney(balance?.purchased ?? 0)} />
         <StatCard label="Оплачено" value={formatMoney(balance?.paid ?? 0)} />
         <StatCard
-          label="Мы должны"
-          value={formatMoney(balance?.balance ?? 0)}
+          label={Number(balance?.balance ?? 0) < 0 ? 'Завод должен нам' : 'Мы должны'}
+          value={formatMoney(Math.abs(Number(balance?.balance ?? 0)))}
           tone={Number(balance?.balance ?? 0) > 0 ? 'negative' : 'positive'}
         />
       </div>

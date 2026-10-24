@@ -74,6 +74,39 @@ export function Dashboard() {
         />
       </div>
 
+      {/* Переплаты: заводу или перевозчику заплатили больше, чем начислено — они должны нам;
+          клиент заплатил вперёд — должны мы ему. */}
+      {((debts.data?.zavodOverpaidTotal ?? 0) > 0 || (debts.data?.carrierOverpaidTotal ?? 0) > 0 || (debts.data?.clientOverpaidTotal ?? 0) > 0) && (
+        <>
+          <h2 className="mb-2 text-sm font-semibold">Переплаты</h2>
+          <div className="mb-6 grid gap-4 sm:grid-cols-3">
+            {(debts.data?.zavodOverpaidTotal ?? 0) > 0 && (
+              <DebtCard
+                title="Должны нам заводы"
+                tone="owedToUs"
+                total={debts.data?.zavodOverpaidTotal ?? 0}
+                items={(debts.data?.topZavodyOverpaid ?? []).map((z) => ({ key: z.id, label: z.name, value: z.balance, href: `/zavody/${z.id}` }))}
+              />
+            )}
+            {(debts.data?.carrierOverpaidTotal ?? 0) > 0 && (
+              <DebtCard
+                title="Должны нам перевозчики"
+                tone="owedToUs"
+                total={debts.data?.carrierOverpaidTotal ?? 0}
+                items={(debts.data?.topCarriersOverpaid ?? []).map((c) => ({ key: c.name, label: c.name, value: c.balance }))}
+              />
+            )}
+            {(debts.data?.clientOverpaidTotal ?? 0) > 0 && (
+              <DebtCard
+                title="Мы должны клиентам (предоплата)"
+                total={debts.data?.clientOverpaidTotal ?? 0}
+                items={(debts.data?.topClientsOverpaid ?? []).map((c) => ({ key: c.id, label: c.name, value: c.balance, href: `/clients/${c.id}` }))}
+              />
+            )}
+          </div>
+        </>
+      )}
+
       <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Оборот" value={formatMoney(data?.revenue ?? 0)} hint={`${data?.salesCount ?? 0} продаж`} />
         <StatCard label="Прибыль (маржа)" value={formatMoney(data?.profit ?? 0)} tone="positive" />
@@ -173,16 +206,19 @@ function DebtCard({
   title,
   total,
   items,
+  tone = 'weOwe',
 }: {
   title: string;
   total: number;
+  /** owedToUs — деньги, которые должны нам (зелёным); weOwe — долг по умолчанию красным. */
+  tone?: 'weOwe' | 'owedToUs';
   items: { key: string | number; label: string; value: string; href?: string }[];
 }) {
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardDescription>{title}</CardDescription>
-        <CardTitle className={`text-2xl tabular-nums ${total > 0 ? 'text-destructive' : 'text-emerald-600'}`}>
+        <CardTitle className={`text-xl tabular-nums sm:text-2xl ${tone === 'owedToUs' || total <= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
           {formatMoney(total)}
         </CardTitle>
       </CardHeader>

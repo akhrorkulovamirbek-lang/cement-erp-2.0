@@ -140,7 +140,8 @@ export function Zavody() {
       sortValue: (r) => Number(r.balance),
       render: (r) => {
         const n = Number(r.balance);
-        if (n <= 0) return <Badge tone="green">Долга нет</Badge>;
+        if (n === 0) return <Badge tone="green">Долга нет</Badge>;
+        if (n < 0) return <span className="font-semibold text-emerald-600">Должен нам {formatMoney(-n)}</span>;
         return <span className="font-semibold text-destructive">{formatMoney(n)}</span>;
       },
     },
