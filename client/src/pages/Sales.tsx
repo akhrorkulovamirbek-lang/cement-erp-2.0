@@ -12,7 +12,7 @@ import {
   useWarehouseBalance,
   zavodyHooks,
 } from '@/api/modules';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Badge } from '@/components/Badge';
 import { RHFButtonGroup } from '@/components/ButtonGroup';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -82,7 +82,8 @@ export function Sales() {
   const [to, setTo] = useState('');
   const [clientFilter, setClientFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [searchParams] = useSearchParams();
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') ?? '');
   const [q, setQ] = useState('');
   const list = salesHooks.useList({
     from: from || undefined,

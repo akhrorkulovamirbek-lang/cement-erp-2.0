@@ -38,7 +38,7 @@ reportsRouter.get(
     const from = (req.query.from as string) || '1970-01-01';
     const to = (req.query.to as string) || '2999-12-31';
 
-    const [revenue, cashIn, cashOut, brokerAcc, topClients, topMarks, dailyTrend, lowStock] = await Promise.all([
+    const [revenue, cashIn, cashOut, brokerAcc, topClients, topMarks, dailyTrend, lowStock, awaiting] = await Promise.all([
       pool.query(
         `SELECT COALESCE(SUM(${UZS_SALE}), 0) AS revenue, COALESCE(SUM(s.margin_total), 0) AS profit, COUNT(*)::int AS count
          FROM sales s WHERE s.date BETWEEN $1 AND $2`,
@@ -72,6 +72,8 @@ reportsRouter.get(
          JOIN cement_marks cm ON cm.id = wb.cement_mark_id
          ORDER BY wb.tonnage ASC`,
       ),
+      // Заказы, принятые, но ещё не отгруженные — за всё время, не за выбранный период.
+      pool.query(`SELECT COUNT(*)::int AS count, COALESCE(SUM(tonnage), 0) AS tonnage FROM sales WHERE awaiting_shipment = true`),
     ]);
 
     res.json({
@@ -85,6 +87,8 @@ reportsRouter.get(
       topMarks: topMarks.rows,
       dailyTrend: dailyTrend.rows,
       warehouseBalance: lowStock.rows,
+      awaitingShipmentCount: awaiting.rows[0].count,
+      awaitingShipmentTonnage: Number(awaiting.rows[0].tonnage),
     });
   }),
 );

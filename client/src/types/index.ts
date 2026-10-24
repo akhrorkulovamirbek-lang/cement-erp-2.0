@@ -406,4 +406,6 @@ export interface ReportSummary {
   topMarks: { id: number; name: string; tonnage: string }[];
   dailyTrend: { date: string; total: string }[];
   warehouseBalance: WarehouseBalance[];
+  awaitingShipmentCount: number;
+  awaitingShipmentTonnage: number;
 }

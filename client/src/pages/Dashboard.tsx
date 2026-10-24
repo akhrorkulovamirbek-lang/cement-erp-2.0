@@ -115,6 +115,14 @@ export function Dashboard() {
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <Link to="/sales?status=awaiting" className="block">
+          <StatCard
+            label="Ждут отгрузки"
+            value={`${data?.awaitingShipmentCount ?? 0} заказов`}
+            hint={`${formatNumber(data?.awaitingShipmentTonnage ?? 0, 2)} т — нажмите, чтобы открыть список`}
+            tone={(data?.awaitingShipmentCount ?? 0) > 0 ? 'negative' : 'default'}
+          />
+        </Link>
         <StatCard label="Баланс биржи" value={formatMoney(data?.brokerBalance ?? 0)} />
         <StatCard label="Позиций на складе" value={String(data?.warehouseBalance.length ?? 0)} />
         <StatCard
