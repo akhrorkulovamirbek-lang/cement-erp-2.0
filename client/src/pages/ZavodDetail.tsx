@@ -15,6 +15,7 @@ interface PurchaseRow {
   tonnage: string;
   pricePerTon: string;
   totalSum: string;
+  machine: string;
 }
 
 export function ZavodDetail() {
@@ -40,6 +41,7 @@ export function ZavodDetail() {
         tonnage: r.tonnage,
         pricePerTon: r.price_per_ton,
         totalSum: r.total_sum,
+        machine: r.machine_number ?? '',
       }),
     ),
     ...(tickets.data ?? []).map(
@@ -51,6 +53,7 @@ export function ZavodDetail() {
         tonnage: t.bought_tonnage,
         pricePerTon: t.price_per_ton,
         totalSum: t.bought_sum,
+        machine: '',
       }),
     ),
   ];
@@ -68,6 +71,18 @@ export function ZavodDetail() {
       },
     },
     { key: 'cementMarkName', header: 'Марка' },
+    {
+      key: 'machine',
+      header: 'Машина',
+      render: (r) =>
+        r.machine ? (
+          <Link to={`/vehicles/${encodeURIComponent(r.machine)}`} className="text-primary hover:underline">
+            {r.machine}
+          </Link>
+        ) : (
+          ''
+        ),
+    },
     {
       key: 'tonnage',
       header: 'Объём',
@@ -89,6 +104,41 @@ export function ZavodDetail() {
       sortValue: (r) => Number(r.totalSum),
       render: (r) => formatMoney(r.totalSum),
     },
+  ];
+
+  // Машины завода: на каких номерах приезжал цемент с этого завода (по приходам; у тикетов машины нет).
+  type MachineRow = { plate: string; trips: number; tonnage: number; total: number; last: string };
+  const machineRows: MachineRow[] = (() => {
+    const map = new Map<string, MachineRow>();
+    for (const r of incoming.data ?? []) {
+      if (r.warehouse === 'CLIENT_GOODS') continue;
+      const plate = (r.machine_number ?? '').replace(/\s+/g, '').toUpperCase();
+      if (!plate) continue;
+      const row = map.get(plate) ?? { plate, trips: 0, tonnage: 0, total: 0, last: '' };
+      row.trips += 1;
+      row.tonnage += Number(r.tonnage);
+      row.total += Number(r.total_sum);
+      if (r.date > row.last) row.last = r.date;
+      map.set(plate, row);
+    }
+    return [...map.values()].sort((a, b) => b.last.localeCompare(a.last));
+  })();
+
+  const machineColumns: Column<MachineRow>[] = [
+    {
+      key: 'plate',
+      header: 'Госномер',
+      sortValue: (r) => r.plate,
+      render: (r) => (
+        <Link to={`/vehicles/${encodeURIComponent(r.plate)}`} className="font-medium text-primary hover:underline">
+          {r.plate}
+        </Link>
+      ),
+    },
+    { key: 'trips', header: 'Рейсов', align: 'right', sortValue: (r) => r.trips },
+    { key: 'tonnage', header: 'Тонн', align: 'right', sortValue: (r) => r.tonnage, render: (r) => `${formatNumber(r.tonnage, 2)} т` },
+    { key: 'total', header: 'На сумму', align: 'right', sortValue: (r) => r.total, render: (r) => formatMoney(r.total) },
+    { key: 'last', header: 'Последний рейс', sortValue: (r) => r.last, render: (r) => formatDate(r.last) },
   ];
 
   const paymentColumns: Column<CashExpense>[] = [
@@ -119,6 +169,17 @@ export function ZavodDetail() {
           label={Number(balance?.balance ?? 0) < 0 ? 'Завод должен нам' : 'Мы должны'}
           value={formatMoney(Math.abs(Number(balance?.balance ?? 0)))}
           tone={Number(balance?.balance ?? 0) > 0 ? 'negative' : 'positive'}
+        />
+      </div>
+
+      <h2 className="mb-2 text-sm font-semibold">Машины завода</h2>
+      <div className="mb-6">
+        <DataTable
+          columns={machineColumns}
+          rows={machineRows}
+          loading={incoming.isLoading}
+          getRowId={(r) => r.plate}
+          emptyMessage="Машин пока нет — номера берутся из приходов"
         />
       </div>
 
