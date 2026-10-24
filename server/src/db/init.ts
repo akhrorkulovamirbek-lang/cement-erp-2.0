@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import bcrypt from 'bcryptjs';
 import { loadSettingsCache, seedSettingsDefaults } from '../core/settingsCache.js';
+import { backfillLogists } from '../modules/logists/service.js';
 import { pool } from './pool.js';
 import { publicPool, runInTenant, schemaNameFor } from './tenant.js';
 
@@ -54,6 +55,7 @@ export async function prepareTenant(orgId: number) {
     await pool.query(readSql('schema.tenant.sql'));
     await seedSettingsDefaults();
     await loadSettingsCache();
+    await backfillLogists();
   });
 }
 

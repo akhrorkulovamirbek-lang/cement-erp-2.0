@@ -5,21 +5,21 @@
  * из старых рейсов один и тот же расчёт. Результат: name, logist_id, owed, paid, balance. */
 export const CARRIER_BALANCES_SQL = `
   WITH hired AS (
-    SELECT lower(btrim(carrier_name)) AS k, min(btrim(carrier_name)) AS name,
+    SELECT norm_name(carrier_name) AS k, min(btrim(carrier_name)) AS name,
            SUM(tonnage * hire_price_per_ton) AS amount
     FROM sales
     WHERE vehicle_type = 'HIRED' AND carrier_name IS NOT NULL AND btrim(carrier_name) <> ''
     GROUP BY 1
   ),
   paid AS (
-    SELECT lower(btrim(carrier_name)) AS k, min(btrim(carrier_name)) AS name,
+    SELECT norm_name(carrier_name) AS k, min(btrim(carrier_name)) AS name,
            SUM(CASE WHEN currency = 'USD' THEN amount * usd_rate ELSE amount END) AS amount
     FROM cash_expense
     WHERE category = 'перевозчик' AND carrier_name IS NOT NULL AND btrim(carrier_name) <> ''
     GROUP BY 1
   ),
   lg AS (
-    SELECT l.id, lower(btrim(l.name)) AS k, l.name,
+    SELECT l.id, norm_name(l.name) AS k, l.name,
            l.initial_debt + COALESCE((SELECT SUM(a.amount) FROM logist_debt_adjustments a WHERE a.logist_id = l.id AND a.amount > 0), 0) AS plus,
            COALESCE((SELECT -SUM(a.amount) FROM logist_debt_adjustments a WHERE a.logist_id = l.id AND a.amount < 0), 0) AS minus
     FROM logists l

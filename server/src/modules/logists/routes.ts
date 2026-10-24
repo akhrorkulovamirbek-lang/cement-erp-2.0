@@ -88,8 +88,8 @@ logistsRouter.put(
           [d.name, d.phone, d.comment, d.initial_debt, d.active, id],
         );
         if (before[0].name !== d.name) {
-          await client.query(`UPDATE sales SET carrier_name = $1 WHERE lower(btrim(carrier_name)) = lower(btrim($2))`, [d.name, before[0].name]);
-          await client.query(`UPDATE cash_expense SET carrier_name = $1 WHERE lower(btrim(carrier_name)) = lower(btrim($2))`, [d.name, before[0].name]);
+          await client.query(`UPDATE sales SET carrier_name = $1 WHERE norm_name(carrier_name) = norm_name($2)`, [d.name, before[0].name]);
+          await client.query(`UPDATE cash_expense SET carrier_name = $1 WHERE norm_name(carrier_name) = norm_name($2)`, [d.name, before[0].name]);
         }
         return rows[0];
       });
@@ -109,8 +109,8 @@ logistsRouter.delete(
     const { rows } = await pool.query('SELECT name FROM logists WHERE id = $1', [id]);
     if (!rows[0]) throw notFound('Логист не найден');
     const { rows: used } = await pool.query(
-      `SELECT (SELECT COUNT(*) FROM sales WHERE lower(btrim(carrier_name)) = lower(btrim($1)))
-            + (SELECT COUNT(*) FROM cash_expense WHERE lower(btrim(carrier_name)) = lower(btrim($1))) AS n`,
+      `SELECT (SELECT COUNT(*) FROM sales WHERE norm_name(carrier_name) = norm_name($1))
+            + (SELECT COUNT(*) FROM cash_expense WHERE norm_name(carrier_name) = norm_name($1)) AS n`,
       [rows[0].name],
     );
     if (Number(used[0].n) > 0) throw conflict('У логиста есть рейсы или выплаты — удалить нельзя, снимите галочку «Активен»');
@@ -135,7 +135,7 @@ logistsRouter.get(
                 s.route, s.awaiting_shipment, c.name AS client_name,
                 s.tonnage * COALESCE(s.hire_price_per_ton, 0) AS hire_total
          FROM sales s LEFT JOIN clients c ON c.id = s.client_id
-         WHERE s.vehicle_type = 'HIRED' AND lower(btrim(s.carrier_name)) = lower(btrim($1))
+         WHERE s.vehicle_type = 'HIRED' AND norm_name(s.carrier_name) = norm_name($1)
          ORDER BY s.date DESC, s.id DESC`,
         [logist.name],
       ),
@@ -143,7 +143,7 @@ logistsRouter.get(
         `SELECT id, date, amount, currency, usd_rate, payment_type, comment,
                 CASE WHEN currency = 'USD' THEN amount * usd_rate ELSE amount END AS amount_uzs
          FROM cash_expense
-         WHERE category = 'перевозчик' AND lower(btrim(carrier_name)) = lower(btrim($1))
+         WHERE category = 'перевозчик' AND norm_name(carrier_name) = norm_name($1)
          ORDER BY date DESC, id DESC`,
         [logist.name],
       ),

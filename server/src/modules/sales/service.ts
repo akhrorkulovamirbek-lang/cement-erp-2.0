@@ -2,6 +2,7 @@ import type pg from 'pg';
 import type { z } from 'zod';
 import { conflict, notFound } from '../../lib/errors.js';
 import { computeFreightTotal, type VehicleType } from '../../lib/pricing.js';
+import { ensureLogist } from '../logists/service.js';
 import { recomputeWarehouseBalance } from '../warehouse/service.js';
 import type { saleSchema } from './schema.js';
 
@@ -113,6 +114,7 @@ function assertEditable(existing: { source: string | null }) {
 
 export async function createSale(client: pg.PoolClient, data: SaleInput) {
   const vehicle = await resolveVehicle(client, data);
+  if (vehicle.vehicleType === 'HIRED') await ensureLogist(client, vehicle.carrierName, vehicle.machineNumber);
   const freightTotal = computeFreightTotal(vehicle.vehicleType, data.tonnage, vehicle.freightPricePerTon);
 
   let cement: CementSource | null = null;
@@ -187,6 +189,7 @@ export async function updateSale(client: pg.PoolClient, id: number, data: SaleIn
   }
 
   const vehicle = await resolveVehicle(client, data);
+  if (vehicle.vehicleType === 'HIRED') await ensureLogist(client, vehicle.carrierName, vehicle.machineNumber);
   const freightTotal = computeFreightTotal(vehicle.vehicleType, data.tonnage, vehicle.freightPricePerTon);
 
   let cement: CementSource | null = null;

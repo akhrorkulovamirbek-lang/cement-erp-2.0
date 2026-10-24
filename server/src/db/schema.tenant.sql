@@ -418,6 +418,12 @@ CREATE INDEX IF NOT EXISTS idx_money_movement_document ON money_movement(documen
 
 -- Логисты (перевозчики): постоянный справочник со своими машинами. С рейсами и выплатами связаны по
 -- имени (sales.carrier_name / cash_expense.carrier_name) — при переименовании логиста имя обновляется и там.
+-- Имя без учёта регистра и краевых пробелов. Не полагаемся на lower() базы: при некоторых настройках
+-- локали кириллица им не приводится к нижнему регистру, и «ИП Старый» и «ип старый» стали бы разными.
+CREATE OR REPLACE FUNCTION norm_name(t text) RETURNS text AS $$
+  SELECT lower(translate(btrim(t), 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯЎҚҒҲ', 'абвгдеёжзийклмнопрстуфхцчшщъыьэюяўқғҳ'))
+$$ LANGUAGE sql IMMUTABLE;
+
 CREATE TABLE IF NOT EXISTS logists (
   id SERIAL PRIMARY KEY,
   name TEXT UNIQUE NOT NULL,

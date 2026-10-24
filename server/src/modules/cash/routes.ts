@@ -3,6 +3,7 @@ import { pool } from '../../db/pool.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { CARRIER_BALANCES_SQL } from '../../lib/carrierBalances.js';
 import { conflict, notFound } from '../../lib/errors.js';
+import { ensureLogist } from '../logists/service.js';
 import { cashExpenseSchema, cashIncomeSchema } from './schema.js';
 
 /** Расход с category='обналичивание' создаётся модулем Обналичивания (см.
@@ -203,6 +204,7 @@ cashExpenseRouter.post(
   '/',
   asyncHandler(async (req, res) => {
     const data = cashExpenseSchema.parse(req.body);
+    if (data.category === 'перевозчик') await ensureLogist(pool, data.carrier_name);
     const { rows } = await pool.query(
       `INSERT INTO cash_expense (date, category, machine_number, zavod_id, carrier_name, expense_type, amount, currency, usd_rate, payment_type, comment, client_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
@@ -230,6 +232,7 @@ cashExpenseRouter.put(
   asyncHandler(async (req, res) => {
     await assertNotLinkedToCashService(req.params.id);
     const data = cashExpenseSchema.parse(req.body);
+    if (data.category === 'перевозчик') await ensureLogist(pool, data.carrier_name);
     const { rows } = await pool.query(
       `UPDATE cash_expense SET date=$1, category=$2, machine_number=$3, zavod_id=$4, carrier_name=$5, expense_type=$6,
          amount=$7, currency=$8, usd_rate=$9, payment_type=$10, comment=$11, client_id=$12
