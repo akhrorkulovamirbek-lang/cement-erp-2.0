@@ -7,8 +7,8 @@ const baseIncomingSchema = z.object({
   date: z.string().min(1),
   warehouse: z.enum(['FACT', 'DIRECT', 'CLIENT_GOODS']).default('FACT'),
   zavod_id: z.coerce.number().int().positive('Выберите поставщика'),
-  // Завод-производитель (необязательно): с какого завода пришёл цемент.
-  factory_id: z.coerce.number().int().positive().optional().nullable(),
+  // Завод-производитель: с какого завода пришёл цемент — обязателен.
+  factory_id: z.coerce.number({ invalid_type_error: 'Выберите завод' }).int().positive('Выберите завод'),
   cement_mark_id: z.coerce.number().int().positive('Выберите марку цемента'),
   packaging: z.enum(PACKAGING_TYPES),
   tonnage: z.coerce.number().positive('Тоннаж должен быть больше нуля'),

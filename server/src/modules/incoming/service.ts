@@ -104,6 +104,8 @@ export async function createIncoming(client: pg.PoolClient, data: IncomingInput)
     const saleId = await insertLinkedSale(client, incoming.id, data);
     await client.query('UPDATE incoming SET linked_sale_id = $1 WHERE id = $2', [saleId, incoming.id]);
     incoming.linked_sale_id = saleId;
+    // Продажа «Напрямую» наследует завод прихода.
+    await client.query('UPDATE sales SET factory_id = $1 WHERE id = $2', [data.factory_id ?? null, saleId]);
   } else {
     // FACT и CLIENT_GOODS одинаково пополняют остаток склада (раздел 9.2 ТЗ).
     await recomputeWarehouseBalance(client, data.zavod_id, data.cement_mark_id, data.packaging);
@@ -153,6 +155,10 @@ export async function updateIncoming(client: pg.PoolClient, id: number, data: In
     await client.query('DELETE FROM sales WHERE id = $1', [existing.linked_sale_id]);
     await client.query('UPDATE incoming SET linked_sale_id = NULL WHERE id = $1', [id]);
     updated.linked_sale_id = null;
+  }
+
+  if (isDirect && updated.linked_sale_id) {
+    await client.query('UPDATE sales SET factory_id = $1 WHERE id = $2', [data.factory_id ?? null, updated.linked_sale_id]);
   }
 
   // DIRECT не трогает склад Факт вовсе — пересчёт нужен только там, где строка была или стала FACT.

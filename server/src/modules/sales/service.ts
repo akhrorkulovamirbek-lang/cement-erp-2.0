@@ -1,6 +1,6 @@
 import type pg from 'pg';
 import type { z } from 'zod';
-import { conflict, notFound } from '../../lib/errors.js';
+import { badRequest, conflict, notFound } from '../../lib/errors.js';
 import { computeFreightTotal, type VehicleType } from '../../lib/pricing.js';
 import { ensureLogist } from '../logists/service.js';
 import { recomputeWarehouseBalance } from '../warehouse/service.js';
@@ -50,6 +50,7 @@ async function resolveLogisticsVehicle(client: pg.PoolClient, machineNumber: str
 }
 
 interface CementSource {
+  factoryId: number | null;
   zavodId: number;
   cementMarkId: number;
   packaging: string;
@@ -66,13 +67,15 @@ async function resolveCementSource(client: pg.PoolClient, data: SaleInput): Prom
       throw conflict('Недостаточно остатка тикета для этой продажи');
     }
     return {
+      // Завод продажи с тикета — тот, что указан в тикете (если в продаже не выбран другой).
+      factoryId: data.factory_id ?? ticket.factory_id ?? null,
       zavodId: ticket.zavod_id,
       cementMarkId: ticket.cement_mark_id,
       packaging: ticket.packaging,
       costPerTon: Number(ticket.price_per_ton),
     };
   }
-  return { zavodId: data.zavod_id!, cementMarkId: data.cement_mark_id!, packaging: data.packaging!, costPerTon: 0 };
+  return { factoryId: data.factory_id ?? null, zavodId: data.zavod_id!, cementMarkId: data.cement_mark_id!, packaging: data.packaging!, costPerTon: 0 };
 }
 
 interface VehicleColumns {
@@ -119,6 +122,8 @@ export async function createSale(client: pg.PoolClient, data: SaleInput) {
 
   let cement: CementSource | null = null;
   if (data.sale_type === 'CEMENT') cement = await resolveCementSource(client, data);
+  // У тикета завода может не быть (старый тикет) — тогда его нужно выбрать в продаже.
+  if (cement && !cement.factoryId) throw badRequest('Выберите завод');
 
   // Отложка: цена может быть не указана — тогда сумма и маржа считаются нулём, пока продажу не завершат.
   const pricePerTon = data.sale_type === 'CEMENT' ? (data.price_per_ton ?? null) : null;
@@ -129,8 +134,8 @@ export async function createSale(client: pg.PoolClient, data: SaleInput) {
   const { rows: saleRows } = await client.query(
     `INSERT INTO sales (date, sale_type, client_id, source, zavod_id, cement_mark_id, packaging, ticket_id,
         tonnage, price_per_ton, cost_per_ton, cost_total, margin_total, vehicle_type, own_vehicle_id, machine_number,
-        carrier_name, freight_price_per_ton, hire_price_per_ton, route, total_sum, comment, is_deferred, awaiting_shipment)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24) RETURNING *`,
+        carrier_name, freight_price_per_ton, hire_price_per_ton, route, total_sum, comment, is_deferred, awaiting_shipment, factory_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING *`,
     [
       data.date,
       data.sale_type,
@@ -156,6 +161,7 @@ export async function createSale(client: pg.PoolClient, data: SaleInput) {
       data.comment ?? null,
       data.is_deferred,
       data.awaiting_shipment,
+      cement?.factoryId ?? null,
     ],
   );
   const sale = saleRows[0];
@@ -194,6 +200,8 @@ export async function updateSale(client: pg.PoolClient, id: number, data: SaleIn
 
   let cement: CementSource | null = null;
   if (data.sale_type === 'CEMENT') cement = await resolveCementSource(client, data);
+  // У тикета завода может не быть (старый тикет) — тогда его нужно выбрать в продаже.
+  if (cement && !cement.factoryId) throw badRequest('Выберите завод');
 
   // Отложка: цена может быть не указана — тогда сумма и маржа считаются нулём, пока продажу не завершат.
   const pricePerTon = data.sale_type === 'CEMENT' ? (data.price_per_ton ?? null) : null;
@@ -205,8 +213,8 @@ export async function updateSale(client: pg.PoolClient, id: number, data: SaleIn
     `UPDATE sales SET date=$1, client_id=$2, source=$3, zavod_id=$4, cement_mark_id=$5, packaging=$6, ticket_id=$7,
        tonnage=$8, price_per_ton=$9, cost_per_ton=$10, cost_total=$11, margin_total=$12, vehicle_type=$13,
        own_vehicle_id=$14, machine_number=$15, carrier_name=$16, freight_price_per_ton=$17, hire_price_per_ton=$18,
-       route=$19, total_sum=$20, comment=$21, is_deferred=$22, awaiting_shipment=$23
-     WHERE id=$24`,
+       route=$19, total_sum=$20, comment=$21, is_deferred=$22, awaiting_shipment=$23, factory_id=$24
+     WHERE id=$25`,
     [
       data.date,
       data.client_id ?? null,
@@ -231,6 +239,7 @@ export async function updateSale(client: pg.PoolClient, id: number, data: SaleIn
       data.comment ?? null,
       data.is_deferred,
       data.awaiting_shipment,
+      cement?.factoryId ?? null,
       id,
     ],
   );

@@ -42,13 +42,14 @@ salesRouter.get(
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
       `SELECT s.*, c.name AS client_name, z.name AS zavod_name, cm.name AS cement_mark_name,
-              t.ticket_number, ov.number AS own_vehicle_number
+              t.ticket_number, ov.number AS own_vehicle_number, f.name AS factory_name
        FROM sales s
        LEFT JOIN clients c ON c.id = s.client_id
        LEFT JOIN zavody z ON z.id = s.zavod_id
        LEFT JOIN cement_marks cm ON cm.id = s.cement_mark_id
        LEFT JOIN tickets t ON t.id = s.ticket_id
        LEFT JOIN machines ov ON ov.id = s.own_vehicle_id
+       LEFT JOIN factories f ON f.id = s.factory_id
        ${where}
        ORDER BY s.date DESC, s.id DESC`,
       params,

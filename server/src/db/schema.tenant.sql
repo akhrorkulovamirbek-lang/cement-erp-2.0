@@ -478,3 +478,5 @@ CREATE INDEX IF NOT EXISTS idx_client_debt_adjustments_client ON client_debt_adj
 -- С какого завода-производителя пришёл цемент (необязательно): приход и тикет.
 ALTER TABLE incoming ADD COLUMN IF NOT EXISTS factory_id INTEGER REFERENCES factories(id);
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS factory_id INTEGER REFERENCES factories(id);
+-- В продаже завод — отметка (с какого завода цемент); остатки склада по-прежнему по поставщику.
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS factory_id INTEGER REFERENCES factories(id);

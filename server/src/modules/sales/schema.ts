@@ -18,6 +18,8 @@ const baseSaleSchema = z.object({
   cement_mark_id: z.coerce.number().int().positive().optional().nullable(),
   packaging: z.enum(PACKAGING_TYPES).optional().nullable(),
   ticket_id: z.coerce.number().int().positive().optional().nullable(),
+  // Завод-производитель (необязательно): отметка, с какого завода цемент.
+  factory_id: z.coerce.number().int().positive().optional().nullable(),
   price_per_ton: z.coerce.number().positive().optional().nullable(),
 
   tonnage: z.coerce.number().positive('Тоннаж должен быть больше нуля'),
@@ -51,6 +53,7 @@ export const saleSchema = baseSaleSchema.superRefine((data, ctx) => {
       if (!data.cement_mark_id) ctx.addIssue({ code: 'custom', path: ['cement_mark_id'], message: 'Выберите марку цемента' });
       if (!data.packaging) ctx.addIssue({ code: 'custom', path: ['packaging'], message: 'Выберите упаковку' });
     }
+    if (data.source === 'warehouse' && !data.factory_id) ctx.addIssue({ code: 'custom', path: ['factory_id'], message: 'Выберите завод' });
     if (!data.price_per_ton) ctx.addIssue({ code: 'custom', path: ['price_per_ton'], message: 'Укажите цену' });
 
     if (data.vehicle_type === 'CLIENT' && !data.machine_number) {
@@ -100,6 +103,7 @@ function validateDeferred(data: z.infer<typeof baseSaleSchema>, ctx: z.Refinemen
       if (!data.zavod_id) ctx.addIssue({ code: 'custom', path: ['zavod_id'], message: 'Выберите поставщика' });
       if (!data.cement_mark_id) ctx.addIssue({ code: 'custom', path: ['cement_mark_id'], message: 'Выберите марку цемента' });
       if (!data.packaging) ctx.addIssue({ code: 'custom', path: ['packaging'], message: 'Выберите упаковку' });
+      if (!data.factory_id) ctx.addIssue({ code: 'custom', path: ['factory_id'], message: 'Выберите завод' });
     }
     if (data.vehicle_type === 'OWN' && !data.own_vehicle_id) {
       ctx.addIssue({ code: 'custom', path: ['own_vehicle_id'], message: 'Выберите машину' });

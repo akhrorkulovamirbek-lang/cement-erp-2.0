@@ -105,8 +105,8 @@ interface ReplenishForm {
   description: string;
 }
 
-/** Завод-производитель необязателен: пустое значение или «не указан» — без завода. */
-const factoryValue = (v: string) => (v && v !== 'none' ? Number(v) : null);
+/** Завод-производитель обязателен — без него приход и тикет не сохраняются. */
+const factoryValue = (v: string) => Number(v);
 
 export function IncomingPage() {
   const { notify } = useToast();
@@ -115,7 +115,7 @@ export function IncomingPage() {
   const zavody = zavodyHooks.useList();
   const cementMarks = cementMarksHooks.useList();
   const factories = factoriesHooks.useList();
-  const factoryOptions = [{ value: 'none', label: '— не указан —' }, ...(factories.data ?? []).filter((f) => f.active).map((f) => ({ value: String(f.id), label: f.name }))];
+  const factoryOptions = (factories.data ?? []).filter((f) => f.active).map((f) => ({ value: String(f.id), label: f.name }));
   const clients = clientsHooks.useList();
   const machines = machinesHooks.useList();
   const balance = useWarehouseBalance();
@@ -187,6 +187,10 @@ export function IncomingPage() {
   }
 
   async function onSubmitIncoming(data: FormValues) {
+    if (!data.factory_id) {
+      notify('Выберите завод', 'error');
+      return;
+    }
     const payload = {
       date: data.date,
       warehouse,
@@ -342,6 +346,10 @@ export function IncomingPage() {
   const createTicket = ticketsHooks.useCreate();
 
   async function onCreateOrEditTicket(data: TicketFormValues) {
+    if (!data.factory_id) {
+      notify('Выберите завод', 'error');
+      return;
+    }
     try {
       if (editingTicket) {
         await updateTicket.mutateAsync({
@@ -588,7 +596,7 @@ export function IncomingPage() {
                   options={(zavody.data ?? []).map((z) => ({ value: String(z.id), label: z.name }))}
                 />
               </FormRow>
-              <FormRow label="Завод (необязательно)">
+              <FormRow label="Завод">
                 <RHFSelect control={ticketForm.control} name="factory_id" options={factoryOptions} />
               </FormRow>
               <FormRow label="Марка цемента" error={ticketForm.formState.errors.cement_mark_id?.message}>
@@ -626,7 +634,7 @@ export function IncomingPage() {
               <FormRow label="Поставщик" error={formState.errors.zavod_id?.message}>
                 <RHFSelect control={control} name="zavod_id" options={(zavody.data ?? []).map((z) => ({ value: String(z.id), label: z.name }))} />
               </FormRow>
-              <FormRow label="Завод (необязательно)">
+              <FormRow label="Завод">
                 <RHFSelect control={control} name="factory_id" options={factoryOptions} />
               </FormRow>
               <FormRow label="Марка цемента" error={formState.errors.cement_mark_id?.message}>
@@ -765,7 +773,7 @@ export function IncomingPage() {
             <FormRow label="Поставщик" error={ticketForm.formState.errors.zavod_id?.message}>
               <RHFSelect control={ticketForm.control} name="zavod_id" options={(zavody.data ?? []).map((z) => ({ value: String(z.id), label: z.name }))} />
             </FormRow>
-            <FormRow label="Завод (необязательно)">
+            <FormRow label="Завод">
               <RHFSelect control={ticketForm.control} name="factory_id" options={factoryOptions} />
             </FormRow>
             <FormRow label="Марка цемента" error={ticketForm.formState.errors.cement_mark_id?.message}>

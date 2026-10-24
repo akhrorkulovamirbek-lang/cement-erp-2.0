@@ -4,6 +4,7 @@ import { ApiError } from '@/api/client';
 import {
   cementMarksHooks,
   clientsHooks,
+  factoriesHooks,
   logistsHooks,
   machinesHooks,
   salesHooks,
@@ -39,6 +40,7 @@ interface FormValues {
   client_id: string;
   source: 'warehouse' | 'ticket' | '';
   ticket_id: string;
+  factory_id: string;
   zavod_id: string;
   cement_mark_id: string;
   packaging: 'MESHOK' | 'NAVAL';
@@ -62,6 +64,7 @@ const emptyForm = (): FormValues => ({
   client_id: '',
   source: 'warehouse',
   ticket_id: '',
+  factory_id: '',
   zavod_id: '',
   cement_mark_id: '',
   packaging: 'MESHOK',
@@ -142,6 +145,14 @@ export function Sales() {
   const freightPerTon = Number(watch('freight_price_per_ton')) || 0;
 
   const selectedTicket = (tickets.data ?? []).find((t) => String(t.id) === ticketId);
+  const factories = factoriesHooks.useList();
+  const factoryOptions = (factories.data ?? []).filter((f) => f.active).map((f) => ({ value: String(f.id), label: f.name }));
+
+  // Продажа с тикета: завод подставляется из тикета (можно поменять).
+  useEffect(() => {
+    if (selectedTicket?.factory_id) setValue('factory_id', String(selectedTicket.factory_id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTicket?.id]);
   const currentBalance = (balance.data ?? []).find(
     (b) => String(b.zavod_id) === zavodId && String(b.cement_mark_id) === cementMarkId && b.packaging === packaging,
   );
@@ -182,6 +193,7 @@ export function Sales() {
       client_id: row.client_id ? String(row.client_id) : '',
       source: row.source === 'ticket' ? 'ticket' : 'warehouse',
       ticket_id: row.ticket_id ? String(row.ticket_id) : '',
+      factory_id: row.factory_id ? String(row.factory_id) : '',
       zavod_id: row.zavod_id ? String(row.zavod_id) : '',
       cement_mark_id: row.cement_mark_id ? String(row.cement_mark_id) : '',
       packaging: row.packaging ?? 'MESHOK',
@@ -200,6 +212,10 @@ export function Sales() {
   }
 
   async function onSubmit(data: FormValues) {
+    if (data.sale_type === 'CEMENT' && !data.factory_id) {
+      notify('Выберите завод', 'error');
+      return;
+    }
     const payload = {
       sale_type: data.sale_type,
       date: data.date,
@@ -208,6 +224,7 @@ export function Sales() {
       client_id: data.client_id ? Number(data.client_id) : null,
       source: data.sale_type === 'CEMENT' ? data.source : null,
       ticket_id: data.sale_type === 'CEMENT' && data.source === 'ticket' ? Number(data.ticket_id) : null,
+      factory_id: data.sale_type === 'CEMENT' && data.factory_id ? Number(data.factory_id) : null,
       zavod_id: data.sale_type === 'CEMENT' && data.source === 'warehouse' ? Number(data.zavod_id) : null,
       cement_mark_id: data.sale_type === 'CEMENT' && data.source === 'warehouse' ? Number(data.cement_mark_id) : null,
       packaging: data.sale_type === 'CEMENT' && data.source === 'warehouse' ? data.packaging : null,
@@ -282,6 +299,7 @@ export function Sales() {
       header: 'Клиент',
       render: (r) => (r.client_name ? r.client_name : <Badge tone="amber">Отложена — клиент не указан</Badge>),
     },
+    { key: 'factory_name', header: 'Завод', render: (r) => r.factory_name ?? '—' },
     { key: 'cement_mark_name', header: 'Марка', render: (r) => r.cement_mark_name ?? '—' },
     {
       key: 'tonnage',
@@ -462,6 +480,10 @@ export function Sales() {
                     </FormRow>
                   </>
                 )}
+
+                <FormRow label="Завод" error={formState.errors.factory_id?.message}>
+                  <RHFSelect control={control} name="factory_id" options={factoryOptions} />
+                </FormRow>
 
                 <div className="grid grid-cols-2 gap-3">
                   <FormRow label="Тоннаж" error={formState.errors.tonnage?.message}>
