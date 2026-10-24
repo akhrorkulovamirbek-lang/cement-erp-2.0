@@ -172,7 +172,8 @@ export function ZavodDetail() {
         />
       </div>
 
-      <h2 className="mb-2 text-sm font-semibold">Машины завода</h2>
+      <h2 className="mb-1 text-sm font-semibold">Машины, которые вывозили цемент с этого завода</h2>
+      <p className="mb-2 text-xs text-muted-foreground">Берутся из приходов, где указан номер машины: сколько раз машина приезжала на завод и сколько тонн увезла.</p>
       <div className="mb-6">
         <DataTable
           columns={machineColumns}
