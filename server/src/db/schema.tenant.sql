@@ -31,6 +31,8 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS contact_person TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS inn TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS initial_debt NUMERIC(16,2) NOT NULL DEFAULT 0;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS comment TEXT;
+-- Одна и та же фирма может быть и клиентом, и поставщиком: у неё один общий баланс «кто кому должен».
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS is_supplier BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
 
 CREATE TABLE IF NOT EXISTS cement_marks (
@@ -367,7 +369,9 @@ CREATE TABLE IF NOT EXISTS cash_expense (
 ALTER TABLE cash_expense ADD COLUMN IF NOT EXISTS carrier_name TEXT;
 ALTER TABLE cash_expense ALTER COLUMN expense_type DROP NOT NULL;
 ALTER TABLE cash_expense DROP CONSTRAINT IF EXISTS cash_expense_category_check;
-ALTER TABLE cash_expense ADD CONSTRAINT cash_expense_category_check CHECK (category IN ('цемент', 'логистика', 'перевозчик', 'прочее', 'обналичивание', 'брокер'));
+ALTER TABLE cash_expense ADD CONSTRAINT cash_expense_category_check CHECK (category IN ('цемент', 'логистика', 'перевозчик', 'прочее', 'обналичивание', 'брокер', 'контрагент'));
+-- Оплата деньгами клиенту-поставщику (category='контрагент'): уменьшает то, что мы ему должны.
+ALTER TABLE cash_expense ADD COLUMN IF NOT EXISTS client_id INTEGER REFERENCES clients(id);
 -- Пополнение брокерского счёта — расход кассы (category='брокер'), связанный с broker_operations.
 ALTER TABLE cash_expense ADD COLUMN IF NOT EXISTS related_broker_op_id INTEGER REFERENCES broker_operations(id) ON DELETE SET NULL;
 

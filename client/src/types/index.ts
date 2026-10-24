@@ -18,6 +18,7 @@ export interface Client {
   inn: string | null;
   initial_debt: string;
   comment: string | null;
+  is_supplier: boolean;
   active: boolean;
   created_at: string;
 }
@@ -278,8 +279,10 @@ export interface CashIncome {
 export interface CashExpense {
   id: number;
   date: string;
-  category: 'цемент' | 'логистика' | 'перевозчик' | 'прочее' | 'обналичивание' | 'брокер';
+  category: 'цемент' | 'логистика' | 'перевозчик' | 'прочее' | 'обналичивание' | 'брокер' | 'контрагент';
   related_broker_op_id: number | null;
+  client_id: number | null;
+  client_name: string | null;
   machine_number: string | null;
   zavod_id: number | null;
   zavod_name: string | null;

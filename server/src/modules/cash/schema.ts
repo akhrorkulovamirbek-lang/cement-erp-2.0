@@ -32,7 +32,8 @@ export const cashIncomeSchema = z
 export const cashExpenseSchema = z
   .object({
     date: z.string().min(1),
-    category: z.enum(['цемент', 'логистика', 'перевозчик', 'прочее']),
+    category: z.enum(['цемент', 'логистика', 'перевозчик', 'прочее', 'контрагент']),
+    client_id: z.coerce.number().int().positive().optional().nullable(),
     machine_number: z.string().trim().optional().nullable(),
     zavod_id: z.coerce.number().int().positive().optional().nullable(),
     carrier_name: z.string().trim().optional().nullable(),
@@ -52,7 +53,10 @@ export const cashExpenseSchema = z
     if (data.category === 'прочее' && !data.comment) {
       ctx.addIssue({ code: 'custom', path: ['comment'], message: 'Комментарий обязателен для прочих расходов' });
     }
-    if (data.category !== 'перевозчик' && !data.expense_type) {
+    if (data.category === 'контрагент' && !data.client_id) {
+      ctx.addIssue({ code: 'custom', path: ['client_id'], message: 'Выберите контрагента' });
+    }
+    if (data.category !== 'перевозчик' && data.category !== 'контрагент' && !data.expense_type) {
       ctx.addIssue({ code: 'custom', path: ['expense_type'], message: 'Укажите тип расхода' });
     }
   });

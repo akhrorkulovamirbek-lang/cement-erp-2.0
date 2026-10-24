@@ -150,9 +150,13 @@ export const cashExpenseRouter = Router();
 cashExpenseRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const { zavod_id, category, from, to } = req.query;
+    const { zavod_id, client_id, category, from, to } = req.query;
     const conditions: string[] = [];
     const params: unknown[] = [];
+    if (client_id) {
+      params.push(Number(client_id));
+      conditions.push(`ce.client_id = $${params.length}`);
+    }
     if (zavod_id) {
       params.push(Number(zavod_id));
       conditions.push(`ce.zavod_id = $${params.length}`);
@@ -171,9 +175,10 @@ cashExpenseRouter.get(
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
-      `SELECT ce.*, z.name AS zavod_name
+      `SELECT ce.*, z.name AS zavod_name, c.name AS client_name
        FROM cash_expense ce
        LEFT JOIN zavody z ON z.id = ce.zavod_id
+       LEFT JOIN clients c ON c.id = ce.client_id
        ${where}
        ORDER BY ce.date DESC, ce.id DESC`,
       params,
@@ -212,8 +217,8 @@ cashExpenseRouter.post(
   asyncHandler(async (req, res) => {
     const data = cashExpenseSchema.parse(req.body);
     const { rows } = await pool.query(
-      `INSERT INTO cash_expense (date, category, machine_number, zavod_id, carrier_name, expense_type, amount, currency, usd_rate, payment_type, comment)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      `INSERT INTO cash_expense (date, category, machine_number, zavod_id, carrier_name, expense_type, amount, currency, usd_rate, payment_type, comment, client_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [
         data.date,
         data.category,
@@ -226,6 +231,7 @@ cashExpenseRouter.post(
         data.usd_rate ?? null,
         data.payment_type,
         data.comment ?? null,
+        data.category === 'контрагент' ? (data.client_id ?? null) : null,
       ],
     );
     res.status(201).json(rows[0]);
@@ -239,8 +245,8 @@ cashExpenseRouter.put(
     const data = cashExpenseSchema.parse(req.body);
     const { rows } = await pool.query(
       `UPDATE cash_expense SET date=$1, category=$2, machine_number=$3, zavod_id=$4, carrier_name=$5, expense_type=$6,
-         amount=$7, currency=$8, usd_rate=$9, payment_type=$10, comment=$11
-       WHERE id=$12 RETURNING *`,
+         amount=$7, currency=$8, usd_rate=$9, payment_type=$10, comment=$11, client_id=$12
+       WHERE id=$13 RETURNING *`,
       [
         data.date,
         data.category,
@@ -253,6 +259,7 @@ cashExpenseRouter.put(
         data.usd_rate ?? null,
         data.payment_type,
         data.comment ?? null,
+        data.category === 'контрагент' ? (data.client_id ?? null) : null,
         req.params.id,
       ],
     );

@@ -23,6 +23,9 @@ const CLIENT_PAID_SUBQUERY = `
     SELECT client_id, total_sum AS amount_uzs FROM incoming WHERE warehouse = 'CLIENT_GOODS' AND client_id IS NOT NULL
     UNION ALL
     SELECT client_id, -amount AS amount_uzs FROM client_debt_adjustments WHERE amount < 0
+    UNION ALL
+    -- Мы заплатили деньгами клиенту-поставщику: наш долг ему уменьшился, значит его «оплата» отрицательная.
+    SELECT client_id, -(${UZS_EXPENSE}) AS amount_uzs FROM cash_expense WHERE category = 'контрагент' AND client_id IS NOT NULL
   ) t GROUP BY client_id
 `;
 // Корректировка долга клиента: положительная увеличивает «куплено», отрицательная уходит в «оплачено».

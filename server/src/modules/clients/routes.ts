@@ -8,12 +8,13 @@ const schema = z.object({
   inn: z.string().trim().optional().nullable().default(null),
   initial_debt: z.coerce.number().default(0),
   comment: z.string().trim().optional().nullable().default(null),
+  is_supplier: z.coerce.boolean().default(false),
   active: z.coerce.boolean().default(true),
 });
 
 export const clientsRouter = createRefRouter({
   table: 'clients',
-  columns: ['name', 'phone', 'contact_person', 'inn', 'initial_debt', 'comment', 'active'],
+  columns: ['name', 'phone', 'contact_person', 'inn', 'initial_debt', 'comment', 'is_supplier', 'active'],
   schema,
   searchColumn: 'name',
 });

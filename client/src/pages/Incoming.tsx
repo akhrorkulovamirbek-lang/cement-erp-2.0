@@ -235,7 +235,7 @@ export function IncomingPage() {
       header: 'Склад',
       render: (r) => {
         if (r.warehouse === 'DIRECT') return <Badge tone="amber">Напрямую</Badge>;
-        if (r.warehouse === 'CLIENT_GOODS') return <Badge tone="blue">От клиента</Badge>;
+        if (r.warehouse === 'CLIENT_GOODS') return <Badge tone="blue">От клиента/поставщика</Badge>;
         return <Badge tone="slate">Факт</Badge>;
       },
     },
@@ -612,7 +612,7 @@ export function IncomingPage() {
                   <Input type="number" step="0.001" {...register('tonnage', { required: 'Укажите тоннаж' })} />
                 </FormRow>
                 <FormRow
-                  label={warehouse === 'CLIENT_GOODS' ? 'Цена за тонну (на эту сумму уменьшится долг клиента)' : 'Цена закупки за тонну'}
+                  label={warehouse === 'CLIENT_GOODS' ? 'Цена за тонну (на эту сумму уменьшится его долг нам)' : 'Цена закупки за тонну'}
                   error={formState.errors.price_per_ton?.message}
                 >
                   <Input type="number" step="0.01" {...register('price_per_ton', { required: 'Укажите цену' })} />

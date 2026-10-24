@@ -45,10 +45,11 @@ interface FormValues {
   inn: string;
   initial_debt: string;
   comment: string;
+  is_supplier: boolean;
   active: boolean;
 }
 
-const emptyForm = (): FormValues => ({ name: '', phone: '', contact_person: '', inn: '', initial_debt: '0', comment: '', active: true });
+const emptyForm = (): FormValues => ({ name: '', phone: '', contact_person: '', inn: '', initial_debt: '0', comment: '', is_supplier: false, active: true });
 
 export function Clients() {
   const { notify } = useToast();
@@ -81,6 +82,7 @@ export function Clients() {
       inn: row.inn ?? '',
       initial_debt: row.initial_debt,
       comment: row.comment ?? '',
+      is_supplier: row.is_supplier,
       active: row.active,
     });
     setEditing(row);
@@ -94,6 +96,7 @@ export function Clients() {
       inn: data.inn || null,
       initial_debt: Number(data.initial_debt || 0),
       comment: data.comment || null,
+      is_supplier: data.is_supplier,
       active: data.active,
     };
     try {
@@ -128,9 +131,12 @@ export function Clients() {
       header: 'Клиент',
       sortValue: (r) => r.name,
       render: (r) => (
-        <Link to={`/clients/${r.id}`} className="font-medium text-primary hover:underline">
-          {r.name}
-        </Link>
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <Link to={`/clients/${r.id}`} className="font-medium text-primary hover:underline">
+            {r.name}
+          </Link>
+          {r.is_supplier && <Badge tone="blue">Поставщик</Badge>}
+        </span>
       ),
     },
     { key: 'phone', header: 'Телефон', render: (r) => r.phone || '—' },
@@ -213,6 +219,7 @@ export function Clients() {
             <FormRow label="Комментарий (необязательно)">
               <Textarea {...register('comment')} rows={2} />
             </FormRow>
+            <RHFCheckbox control={control} name="is_supplier" label="Он же поставщик — мы у него тоже покупаем цемент" />
             <RHFCheckbox control={control} name="active" label="Активен" />
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setEditing(null)}>

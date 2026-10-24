@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '@/api/client';
 import {
+  cashExpenseHooks,
   cashIncomeHooks,
   cementMarksHooks,
   clientAdjustmentsHooks,
@@ -29,7 +30,7 @@ import { PACKAGING_LABELS, PACKAGING_OPTIONS } from '@/lib/constants';
 import { downloadClientReport, type ReportRow } from '@/lib/clientReportExcel';
 import { formatDate, formatMoney, formatNumber, todayISO } from '@/lib/format';
 import { useToast } from '@/lib/toast';
-import type { CashIncome, ClientDebtAdjustment, Incoming, Sale } from '@/types';
+import type { CashExpense, CashIncome, ClientDebtAdjustment, Incoming, Sale } from '@/types';
 
 interface PayDebtForm {
   date: string;
@@ -89,6 +90,7 @@ export function ClientDetail() {
   const balances = useClientBalances();
   const sales = salesHooks.useList({ client_id: clientId });
   const payments = cashIncomeHooks.useList({ client_id: clientId });
+  const paidToHim = cashExpenseHooks.useList({ client_id: clientId });
   const payDebt = cashIncomeHooks.useCreate();
   const goodsPaymentsList = incomingHooks.useList({ client_id: clientId });
   const payGoods = incomingHooks.useCreate();
@@ -270,7 +272,7 @@ export function ClientDetail() {
         kind: 'goods',
         order: r.id,
         date: r.date,
-        event: 'Оплата товаром',
+        event: 'Приняли цемент от него (взаимозачёт)',
         zavod: r.zavod_name ?? '',
         mark: r.cement_mark_name ?? '',
         packaging: r.packaging ? PACKAGING_LABELS[r.packaging] : '',
@@ -284,6 +286,30 @@ export function ClientDetail() {
         method: 'товаром',
         comment: r.comment ?? '',
         delta: -Number(r.total_sum),
+      });
+    }
+
+    for (const r of paidToHim.data ?? []) {
+      const rate = Number(r.usd_rate || 0);
+      const uzs = r.currency === 'USD' ? Number(r.amount) * rate : Number(r.amount);
+      events.push({
+        kind: 'adjustment',
+        order: r.id,
+        date: r.date,
+        event: 'Мы заплатили ему деньгами',
+        zavod: '',
+        mark: '',
+        packaging: '',
+        tonnage: null,
+        price: null,
+        vehicle: '',
+        freight: null,
+        charged: uzs,
+        paid: null,
+        payer: '',
+        method: r.payment_type,
+        comment: r.comment ?? '',
+        delta: uzs,
       });
     }
 
@@ -410,6 +436,19 @@ export function ClientDetail() {
     { key: 'comment', header: 'Комментарий', render: (r) => r.comment || '—' },
   ];
 
+  const paidToHimColumns: Column<CashExpense>[] = [
+    { key: 'date', header: 'Дата', sortValue: (r) => r.date, render: (r) => formatDate(r.date) },
+    {
+      key: 'amount',
+      header: 'Сумма',
+      align: 'right',
+      sortValue: (r) => Number(r.amount),
+      render: (r) => <MoneyCell amount={r.amount} currency={r.currency} usdRate={r.usd_rate} />,
+    },
+    { key: 'payment_type', header: 'Способ' },
+    { key: 'comment', header: 'Комментарий', render: (r) => r.comment || '—' },
+  ];
+
   const adjustmentColumns: Column<ClientDebtAdjustment>[] = [
     { key: 'date', header: 'Дата', sortValue: (r) => r.date, render: (r) => formatDate(r.date) },
     {
@@ -464,7 +503,7 @@ export function ClientDetail() {
               Скачать в Excel
             </Button>
             <Button variant="outline" onClick={openPayGoods}>
-              Погасить товаром
+              Принять цемент от него
             </Button>
             <Button onClick={openPayDebt}>Погасить долг</Button>
           </div>
@@ -475,7 +514,7 @@ export function ClientDetail() {
         <StatCard label="Куплено всего" value={formatMoney(balance?.purchased ?? 0)} />
         <StatCard label="Оплачено всего" value={formatMoney(balance?.paid ?? 0)} />
         <StatCard
-          label={Number(balance?.balance ?? 0) < 0 ? 'Переплата (мы должны клиенту)' : 'Текущий долг'}
+          label={Number(balance?.balance ?? 0) < 0 ? 'Мы должны ему (переплата / поставки)' : 'Текущий долг'}
           value={formatMoney(Math.abs(Number(balance?.balance ?? 0)))}
           tone={Number(balance?.balance ?? 0) > 0 ? 'negative' : 'positive'}
         />
@@ -503,7 +542,7 @@ export function ClientDetail() {
         />
       </div>
 
-      <h2 className="mb-2 text-sm font-semibold">Оплатил товаром</h2>
+      <h2 className="mb-2 text-sm font-semibold">Принято от него цементом (взаимозачёт)</h2>
       <DataTable
         columns={goodsColumns}
         rows={goodsPayments}
@@ -511,6 +550,17 @@ export function ClientDetail() {
         getRowId={(r) => r.id}
         emptyMessage="Оплат товаром пока нет"
       />
+
+      <h2 className="mb-2 mt-6 text-sm font-semibold">Мы заплатили ему деньгами (поставщику)</h2>
+      <div className="mb-6">
+        <DataTable
+          columns={paidToHimColumns}
+          rows={paidToHim.data ?? []}
+          loading={paidToHim.isLoading}
+          getRowId={(r) => r.id}
+          emptyMessage="Мы ему деньгами не платили"
+        />
+      </div>
 
       <h2 className="mb-2 mt-6 text-sm font-semibold">Корректировки долга</h2>
       <DataTable
@@ -627,7 +677,7 @@ export function ClientDetail() {
       )}
 
       {payGoodsOpen && (
-        <SidePanel title="Погасить товаром" onClose={() => setPayGoodsOpen(false)}>
+        <SidePanel title="Принять цемент от контрагента" onClose={() => setPayGoodsOpen(false)}>
           <form onSubmit={goodsForm.handleSubmit(onPayGoods)} className="space-y-4">
             <FormRow label="Дата">
               <Input type="date" {...goodsForm.register('date', { required: true })} />

@@ -64,6 +64,7 @@ const EXPENSE_CATEGORY_OPTIONS = [
   { value: 'цемент', label: 'Оплата заводу' },
   { value: 'логистика', label: 'Логистика' },
   { value: 'перевозчик', label: 'Оплата перевозчику' },
+  { value: 'контрагент', label: 'Оплата поставщику (клиенту)' },
   { value: 'прочее', label: 'Прочее' },
 ];
 const KIND_OPTIONS = [
@@ -206,6 +207,7 @@ export function Cash() {
         date: row.date,
         category: row.category,
         zavod_id: row.zavod_id ? String(row.zavod_id) : '',
+        client_id: row.client_id ? String(row.client_id) : '',
         machine_number: row.machine_number ?? '',
         carrier_name: row.carrier_name ?? '',
         expense_type: row.expense_type ?? '',
@@ -246,9 +248,10 @@ export function Cash() {
           date: data.date,
           category: data.category,
           zavod_id: data.category === 'цемент' && data.zavod_id ? Number(data.zavod_id) : null,
+          client_id: data.category === 'контрагент' && data.client_id ? Number(data.client_id) : null,
           machine_number: data.category === 'логистика' && data.machine_number ? data.machine_number : null,
           carrier_name: data.category === 'перевозчик' ? data.carrier_name : null,
-          expense_type: data.category === 'перевозчик' ? null : data.expense_type,
+          expense_type: data.category === 'перевозчик' || data.category === 'контрагент' ? null : data.expense_type,
           amount: Number(data.amount),
           currency: data.currency,
           usd_rate: data.currency === 'USD' ? Number(data.usd_rate) : null,
@@ -323,6 +326,7 @@ export function Cash() {
       render: (r) => {
         if (r.kind === 'info') return 'Возврат тикета';
         if (r.kind === 'expense' && r.category === 'брокер') return 'Пополнение брокерского счёта';
+        if (r.kind === 'expense' && r.category === 'контрагент') return 'Оплата поставщику';
         return r.category;
       },
     },
@@ -336,6 +340,7 @@ export function Cash() {
           return r.payer_name ? `${name} (${r.payer_name})` : name;
         }
         if (r.category === 'брокер') return 'Брокерский счёт';
+        if (r.category === 'контрагент') return r.client_name || '—';
         return r.zavod_name || r.carrier_name || r.machine_number || '—';
       },
     },
@@ -440,6 +445,16 @@ export function Cash() {
               </FormRow>
             )}
 
+            {formKind === 'expense' && category === 'контрагент' && (
+              <div className="space-y-1.5">
+                <FormRow label="Поставщик (клиент)" error={formState.errors.client_id?.message}>
+                  <RHFSelect control={control} name="client_id" options={clientOptions} />
+                </FormRow>
+                <p className="text-xs text-muted-foreground">
+                  Деньги, которые мы платим фирме, у которой покупаем цемент. Уменьшает то, что мы ей должны.
+                </p>
+              </div>
+            )}
             {formKind === 'expense' && category === 'цемент' && (
               <FormRow label="Завод">
                 <RHFSelect

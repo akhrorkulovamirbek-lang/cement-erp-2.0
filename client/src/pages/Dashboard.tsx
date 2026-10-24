@@ -98,7 +98,7 @@ export function Dashboard() {
             )}
             {(debts.data?.clientOverpaidTotal ?? 0) > 0 && (
               <DebtCard
-                title="Мы должны клиентам (предоплата)"
+                title="Мы должны клиентам и поставщикам"
                 total={debts.data?.clientOverpaidTotal ?? 0}
                 items={(debts.data?.topClientsOverpaid ?? []).map((c) => ({ key: c.id, label: c.name, value: c.balance, href: `/clients/${c.id}` }))}
               />

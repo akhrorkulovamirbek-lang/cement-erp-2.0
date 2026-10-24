@@ -14,7 +14,7 @@ export const WAREHOUSE_LABELS: Record<WarehouseType, string> = {
   FACT: 'Факт',
   DIRECT: 'Напрямую',
   TICKET: 'Тикет',
-  CLIENT_GOODS: 'Оплата товаром',
+  CLIENT_GOODS: 'От клиента/поставщика (взаимозачёт)',
 };
 export const WAREHOUSE_OPTIONS = WAREHOUSE_TYPES.map((value) => ({ value, label: WAREHOUSE_LABELS[value] }));
 
