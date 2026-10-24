@@ -39,6 +39,81 @@ export function Dashboard() {
 
       <QuickPeriods className="mb-4" from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} />
 
+      <h2 className="mb-1 text-sm font-semibold">{from || to ? 'За выбранный период' : 'За всё время'}</h2>
+      <p className="mb-3 text-xs text-muted-foreground">Эти цифры меняются при выборе периода.</p>
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <StatCard label="Оборот" value={formatMoney(data?.revenue ?? 0)} hint={`${data?.salesCount ?? 0} продаж`} />
+        <StatCard label="Прибыль (маржа)" value={formatMoney(data?.profit ?? 0)} tone="positive" />
+        <StatCard label="Приход кассы" value={formatMoney(data?.cashIn ?? 0)} />
+        <StatCard label="Расход кассы" value={formatMoney(data?.cashOut ?? 0)} />
+        <StatCard label="Продано, т" value={`${formatNumber(data?.soldTonnage ?? 0, 2)} т`} />
+        <StatCard label="Закуплено (приходы и тикеты)" value={formatMoney(data?.purchasedSum ?? 0)} />
+      </div>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm">Динамика продаж</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  stroke="var(--muted-foreground)"
+                  tickFormatter={(v) => formatNumber(v)}
+                />
+                <Tooltip
+                  formatter={(v: number) => formatMoney(v)}
+                  contentStyle={{ background: 'var(--popover)', border: '1px solid var(--border)', color: 'var(--popover-foreground)' }}
+                />
+                <Line type="monotone" dataKey="total" stroke="var(--chart-1)" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Топ клиентов</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {(data?.topClients ?? []).map((c) => (
+                <li key={c.id} className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{c.name}</span>
+                  <span className="font-medium tabular-nums">{formatMoney(c.total)}</span>
+                </li>
+              ))}
+              {(data?.topClients ?? []).length === 0 && <li className="text-sm text-muted-foreground">Нет данных</li>}
+            </ul>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Топ марок</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {(data?.topMarks ?? []).map((m) => (
+                <li key={m.id} className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{m.name}</span>
+                  <span className="font-medium tabular-nums">{formatNumber(m.tonnage, 2)} т</span>
+                </li>
+              ))}
+              {(data?.topMarks ?? []).length === 0 && <li className="text-sm text-muted-foreground">Нет данных</li>}
+            </ul>
+          </CardContent>
+        </Card>
+      </div>
+
+
+      <h2 className="mb-1 mt-8 text-sm font-semibold">Сейчас</h2>
+      <p className="mb-3 text-xs text-muted-foreground">Остатки и долги на сегодня — от выбранного периода не зависят.</p>
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Наличные" value={formatMoney(cashBalances.data?.наличка ?? 0)} />
         <StatCard label="Карта" value={formatMoney(cashBalances.data?.карта ?? 0)} />
@@ -107,13 +182,6 @@ export function Dashboard() {
         </>
       )}
 
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Оборот" value={formatMoney(data?.revenue ?? 0)} hint={`${data?.salesCount ?? 0} продаж`} />
-        <StatCard label="Прибыль (маржа)" value={formatMoney(data?.profit ?? 0)} tone="positive" />
-        <StatCard label="Приход кассы" value={formatMoney(data?.cashIn ?? 0)} />
-        <StatCard label="Расход кассы" value={formatMoney(data?.cashOut ?? 0)} />
-      </div>
-
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Link to="/sales?status=awaiting" className="block">
           <StatCard
@@ -130,67 +198,6 @@ export function Dashboard() {
           value={String(lowStock.length)}
           tone={lowStock.length > 0 ? 'negative' : 'default'}
         />
-      </div>
-
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-sm">Динамика продаж</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  stroke="var(--muted-foreground)"
-                  tickFormatter={(v) => formatNumber(v)}
-                />
-                <Tooltip
-                  formatter={(v: number) => formatMoney(v)}
-                  contentStyle={{ background: 'var(--popover)', border: '1px solid var(--border)', color: 'var(--popover-foreground)' }}
-                />
-                <Line type="monotone" dataKey="total" stroke="var(--chart-1)" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Топ клиентов</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {(data?.topClients ?? []).map((c) => (
-                <li key={c.id} className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">{c.name}</span>
-                  <span className="font-medium tabular-nums">{formatMoney(c.total)}</span>
-                </li>
-              ))}
-              {(data?.topClients ?? []).length === 0 && <li className="text-sm text-muted-foreground">Нет данных</li>}
-            </ul>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Топ марок</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {(data?.topMarks ?? []).map((m) => (
-                <li key={m.id} className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">{m.name}</span>
-                  <span className="font-medium tabular-nums">{formatNumber(m.tonnage, 2)} т</span>
-                </li>
-              ))}
-              {(data?.topMarks ?? []).length === 0 && <li className="text-sm text-muted-foreground">Нет данных</li>}
-            </ul>
-          </CardContent>
-        </Card>
       </div>
 
       {lowStock.length > 0 && (

@@ -39,9 +39,10 @@ reportsRouter.get(
     const from = (req.query.from as string) || '1970-01-01';
     const to = (req.query.to as string) || '2999-12-31';
 
-    const [revenue, cashIn, cashOut, brokerAcc, topClients, topMarks, dailyTrend, lowStock, awaiting] = await Promise.all([
+    const [revenue, cashIn, cashOut, brokerAcc, topClients, topMarks, dailyTrend, lowStock, awaiting, purchases] = await Promise.all([
       pool.query(
-        `SELECT COALESCE(SUM(${UZS_SALE}), 0) AS revenue, COALESCE(SUM(s.margin_total), 0) AS profit, COUNT(*)::int AS count
+        `SELECT COALESCE(SUM(${UZS_SALE}), 0) AS revenue, COALESCE(SUM(s.margin_total), 0) AS profit, COUNT(*)::int AS count,
+                COALESCE(SUM(s.tonnage), 0) AS tonnage
          FROM sales s WHERE s.date BETWEEN $1 AND $2`,
         [from, to],
       ),
@@ -75,12 +76,23 @@ reportsRouter.get(
       ),
       // Заказы, принятые, но ещё не отгруженные — за всё время, не за выбранный период.
       pool.query(`SELECT COUNT(*)::int AS count, COALESCE(SUM(tonnage), 0) AS tonnage FROM sales WHERE awaiting_shipment = true`),
+      // Закуплено за период: приходы на склад/напрямую и тикеты биржи (оплата товаром от клиентов — не закупка).
+      pool.query(
+        `SELECT COALESCE(SUM(total), 0) AS total FROM (
+           SELECT total_sum AS total FROM incoming WHERE warehouse IN ('FACT', 'DIRECT') AND date BETWEEN $1 AND $2
+           UNION ALL
+           SELECT bought_sum AS total FROM tickets WHERE date BETWEEN $1 AND $2
+         ) t`,
+        [from, to],
+      ),
     ]);
 
     res.json({
       revenue: Number(revenue.rows[0].revenue),
       profit: Number(revenue.rows[0].profit),
       salesCount: Number(revenue.rows[0].count),
+      soldTonnage: Number(revenue.rows[0].tonnage),
+      purchasedSum: Number(purchases.rows[0].total),
       cashIn: Number(cashIn.rows[0].total),
       cashOut: Number(cashOut.rows[0].total),
       brokerBalance: Number(brokerAcc.rows[0]?.balance ?? 0),

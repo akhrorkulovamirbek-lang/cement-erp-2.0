@@ -41,12 +41,15 @@ export function Reports() {
           <VehiclesTab />
         </TabsContent>
         <TabsContent value="clients" className="mt-4">
+          <p className="mb-3 text-xs text-muted-foreground">Долги и баланс на сегодня — от выбора периода не зависят (периоды есть на вкладках «Цемент», «Логистика», «Обналичивание»).</p>
           <ClientsTab />
         </TabsContent>
         <TabsContent value="zavody" className="mt-4">
+          <p className="mb-3 text-xs text-muted-foreground">Долги и баланс на сегодня — от выбора периода не зависят (периоды есть на вкладках «Цемент», «Логистика», «Обналичивание»).</p>
           <ZavodyTab />
         </TabsContent>
         <TabsContent value="carriers" className="mt-4">
+          <p className="mb-3 text-xs text-muted-foreground">Долги и баланс на сегодня — от выбора периода не зависят (периоды есть на вкладках «Цемент», «Логистика», «Обналичивание»).</p>
           <CarriersTab />
         </TabsContent>
         <TabsContent value="cash-service" className="mt-4">

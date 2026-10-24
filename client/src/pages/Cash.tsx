@@ -145,6 +145,17 @@ export function Cash() {
     return merged.filter((r) => r.kind === typeFilter);
   }, [incomeList.data, expenseList.data, ticketReturns.data, typeFilter]);
 
+  // Итоги за выбранный период (в сумах): считаются по тем же записям, что показаны в списке ниже.
+  const periodTotals = useMemo(() => {
+    const uzs = (amount: string, currency: string, rate: string | null) => (currency === 'USD' ? Number(amount) * Number(rate ?? 0) : Number(amount));
+    const income = (incomeList.data ?? []).reduce((sum, r) => {
+      const extraCurrency = r.currency === 'USD' ? 'UZS' : 'USD';
+      return sum + uzs(r.amount, r.currency, r.usd_rate) + (r.extra_amount ? uzs(r.extra_amount, extraCurrency, r.usd_rate) : 0);
+    }, 0);
+    const expense = (expenseList.data ?? []).reduce((sum, r) => sum + uzs(r.amount, r.currency, r.usd_rate), 0);
+    return { income, expense };
+  }, [incomeList.data, expenseList.data]);
+
   const clientOptions = (
     justAddedClient && !(clients.data ?? []).some((c) => c.id === justAddedClient.id)
       ? [justAddedClient, ...(clients.data ?? [])]
@@ -378,17 +389,24 @@ export function Cash() {
     <div>
       <PageHeader title="Касса" subtitle="Приход и расход денег — единым списком" />
 
-      <h2 className="mb-2 text-sm font-semibold">Касса в сумах</h2>
+      <h2 className="mb-2 text-sm font-semibold">Касса в сумах (остаток на сегодня)</h2>
       <div className="mb-4 grid gap-4 sm:grid-cols-3">
         <StatCard label="Наличные" value={formatMoney(cashBalances.data?.uzs.наличка ?? 0)} />
         <StatCard label="Карта" value={formatMoney(cashBalances.data?.uzs.карта ?? 0)} />
         <StatCard label="Перевод" value={formatMoney(cashBalances.data?.uzs.перечисление ?? 0)} />
       </div>
-      <h2 className="mb-2 text-sm font-semibold">Касса в долларах</h2>
+      <h2 className="mb-2 text-sm font-semibold">Касса в долларах (остаток на сегодня)</h2>
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Наличные" value={formatMoney(cashBalances.data?.usd.наличка ?? 0, 'USD')} />
         <StatCard label="Карта" value={formatMoney(cashBalances.data?.usd.карта ?? 0, 'USD')} />
         <StatCard label="Перевод" value={formatMoney(cashBalances.data?.usd.перечисление ?? 0, 'USD')} />
+      </div>
+
+      <h2 className="mb-2 text-sm font-semibold">{from || to ? 'Операции за выбранный период' : 'Операции за всё время'}</h2>
+      <div className="mb-4 grid gap-4 sm:grid-cols-3">
+        <StatCard label="Приход за период" value={formatMoney(periodTotals.income)} tone="positive" />
+        <StatCard label="Расход за период" value={formatMoney(periodTotals.expense)} tone="negative" />
+        <StatCard label="Разница" value={formatMoney(periodTotals.income - periodTotals.expense)} tone={periodTotals.income >= periodTotals.expense ? 'positive' : 'negative'} />
       </div>
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

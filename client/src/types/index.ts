@@ -400,6 +400,8 @@ export interface ReportSummary {
   revenue: number;
   profit: number;
   salesCount: number;
+  soldTonnage: number;
+  purchasedSum: number;
   cashIn: number;
   cashOut: number;
   brokerBalance: number;

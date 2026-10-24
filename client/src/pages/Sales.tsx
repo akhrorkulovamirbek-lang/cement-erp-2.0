@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { ApiError } from '@/api/client';
 import {
@@ -336,6 +336,17 @@ export function Sales() {
     },
   ];
 
+  const saleRows = list.data ?? [];
+  const sumOf = (f: (r: Sale) => number) => saleRows.reduce((s, r) => s + f(r), 0);
+  // Итоги по тем продажам, что сейчас показаны (с учётом периода и фильтров).
+  const salesFooter: ReactNode[] = columns.map((col) => {
+    if (col.key === 'date') return 'Итого';
+    if (col.key === 'tonnage') return `${formatNumber(sumOf((r) => Number(r.tonnage)), 3)} т`;
+    if (col.key === 'total_sum') return formatMoney(sumOf((r) => Number(r.total_sum)));
+    if (col.key === 'margin_total') return formatMoney(sumOf((r) => (r.sale_type === 'CEMENT' ? Number(r.margin_total) : 0)));
+    return null;
+  });
+
   return (
     <div>
       <PageHeader title="Продажи" subtitle="Цемент и логистика — единая форма" action={<Button onClick={openNew}>+ Новая продажа</Button>} />
@@ -368,7 +379,7 @@ export function Sales() {
         />
       </FilterBar>
 
-      <DataTable columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} extraRowAction={(r) => (r.awaiting_shipment ? <Button variant="outline" size="sm" onClick={() => onShip(r)}>Отгрузить</Button> : null)} onEdit={openEdit} onDelete={(r) => (r.source === 'direct' ? notify('Эта продажа связана с приходом «Напрямую» — удалите её через Приход', 'error') : setDeleting(r))} />
+      <DataTable footer={salesFooter} columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} extraRowAction={(r) => (r.awaiting_shipment ? <Button variant="outline" size="sm" onClick={() => onShip(r)}>Отгрузить</Button> : null)} onEdit={openEdit} onDelete={(r) => (r.source === 'direct' ? notify('Эта продажа связана с приходом «Напрямую» — удалите её через Приход', 'error') : setDeleting(r))} />
 
       {editing && (
         <SidePanel title={editing === 'new' ? 'Новая продажа' : 'Изменить продажу'} onClose={() => setEditing(null)} widthClass="sm:max-w-xl">

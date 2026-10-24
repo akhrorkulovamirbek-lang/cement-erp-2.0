@@ -1,5 +1,5 @@
 import { Lock } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { ApiError } from '@/api/client';
 import {
@@ -423,6 +423,15 @@ export function IncomingPage() {
       ? `${warehouse === 'DIRECT' ? 'Напрямую' : 'Факт'} · ${cementMarks.data?.find((m) => String(m.id) === watch('cement_mark_id'))?.name ?? ''} · ${PACKAGING_LABELS[watch('packaging')]} · ${formatNumber(watch('tonnage') || 0, 3)} т`
       : '';
 
+  const incomingRows = list.data ?? [];
+  // Итоги по приходам, что сейчас показаны в истории (с учётом периода и фильтров).
+  const incomingFooter: ReactNode[] = columns.map((col) => {
+    if (col.key === 'date') return 'Итого';
+    if (col.key === 'tonnage') return `${formatNumber(incomingRows.reduce((s, r) => s + Number(r.tonnage), 0), 3)} т`;
+    if (col.key === 'total_sum') return formatMoney(incomingRows.reduce((s, r) => s + Number(r.total_sum), 0));
+    return null;
+  });
+
   return (
     <div>
       <PageHeader
@@ -452,7 +461,7 @@ export function IncomingPage() {
         )}
       </div>
 
-      <h2 className="mb-2 text-sm font-semibold">История приходов</h2>
+      <h2 className="mb-2 text-sm font-semibold">История приходов {from || to ? '(за выбранный период)' : '(за всё время)'}</h2>
       <FilterBar from={from} to={to} onFromChange={setFrom} onToChange={setTo} q={q} onQChange={setQ} qPlaceholder="Номер машины…">
         <PlainSelect
           value={zavodFilter}
@@ -462,7 +471,7 @@ export function IncomingPage() {
           options={[{ value: '', label: 'Все заводы' }, ...(zavody.data ?? []).map((z) => ({ value: String(z.id), label: z.name }))]}
         />
       </FilterBar>
-      <DataTable columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} onEdit={openEdit} onDelete={setDeleting} />
+      <DataTable footer={incomingFooter} columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} onEdit={openEdit} onDelete={setDeleting} />
 
       <div className="mt-8 mb-6">
         <div className="mb-3 flex items-center justify-between">
