@@ -16,6 +16,7 @@ import { clientsRouter } from './modules/clients/routes.js';
 import { logisticsExpenseCategoriesRouter } from './modules/expenseCategories/routes.js';
 import { importRouter } from './modules/import/routes.js';
 import { incomingRouter } from './modules/incoming/routes.js';
+import { logistsRouter } from './modules/logists/routes.js';
 import { machinesRouter } from './modules/machines/routes.js';
 import { reportsRouter } from './modules/reports/routes.js';
 import { salesRouter } from './modules/sales/routes.js';
@@ -60,6 +61,13 @@ export function createApp() {
     cementMarksRouter,
   );
   app.use('/api/machines', refPermission, auditResource('machine', { table: 'machines', label: 'Машина', nameColumn: 'number' }), machinesRouter);
+  // Логисты: смотреть могут те, кому нужны формы продажи/кассы; менять — только с доступом к справочникам.
+  app.use(
+    '/api/logists',
+    requireAnyPermission('references', 'sales', 'cash'),
+    auditResource('logist', { table: 'logists', label: 'Логист', nameColumn: 'name' }),
+    logistsRouter,
+  );
   app.use(
     '/api/bank-accounts',
     refPermission,

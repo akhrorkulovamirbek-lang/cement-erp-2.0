@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../../db/pool.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { CARRIER_BALANCES_SQL } from '../../lib/carrierBalances.js';
 
 export const reportsRouter = Router();
 
@@ -160,19 +161,7 @@ reportsRouter.get(
          WHERE z.initial_debt + COALESCE(i.total, 0) - COALESCE(p.total, 0) <> 0
          ORDER BY balance DESC`,
       ),
-      pool.query(
-        `SELECT carrier_name AS name, SUM(owed) - SUM(paid) AS balance
-         FROM (
-           SELECT carrier_name, SUM(tonnage * hire_price_per_ton) AS owed, 0 AS paid
-           FROM sales WHERE vehicle_type = 'HIRED' AND carrier_name IS NOT NULL GROUP BY carrier_name
-           UNION ALL
-           SELECT carrier_name, 0 AS owed, SUM(${UZS_EXPENSE}) AS paid
-           FROM cash_expense WHERE category = 'перевозчик' AND carrier_name IS NOT NULL GROUP BY carrier_name
-         ) t
-         GROUP BY carrier_name
-         HAVING SUM(owed) - SUM(paid) <> 0
-         ORDER BY balance DESC`,
-      ),
+      pool.query(`SELECT name, balance FROM (${CARRIER_BALANCES_SQL}) c WHERE balance <> 0 ORDER BY balance DESC`),
     ]);
 
     // Баланс > 0 — должны нам (клиент) / мы должны (завод, перевозчик); < 0 — переплата в обратную
@@ -308,18 +297,7 @@ reportsRouter.get(
 reportsRouter.get(
   '/carriers',
   asyncHandler(async (_req, res) => {
-    const { rows } = await pool.query(
-      `SELECT carrier_name AS name, SUM(owed) AS owed, SUM(paid) AS paid, SUM(owed) - SUM(paid) AS balance
-       FROM (
-         SELECT carrier_name, SUM(tonnage * hire_price_per_ton) AS owed, 0 AS paid
-         FROM sales WHERE vehicle_type = 'HIRED' AND carrier_name IS NOT NULL GROUP BY carrier_name
-         UNION ALL
-         SELECT carrier_name, 0 AS owed, SUM(${UZS_EXPENSE}) AS paid
-         FROM cash_expense WHERE category = 'перевозчик' AND carrier_name IS NOT NULL GROUP BY carrier_name
-       ) t
-       GROUP BY carrier_name
-       ORDER BY balance DESC`,
-    );
+    const { rows } = await pool.query(`SELECT * FROM (${CARRIER_BALANCES_SQL}) c ORDER BY balance DESC`);
     res.json(rows);
   }),
 );

@@ -416,6 +416,38 @@ CREATE INDEX IF NOT EXISTS idx_settlement_movement_document ON settlement_moveme
 CREATE INDEX IF NOT EXISTS idx_money_movement_account ON money_movement(account);
 CREATE INDEX IF NOT EXISTS idx_money_movement_document ON money_movement(document_type, document_id);
 
+-- Логисты (перевозчики): постоянный справочник со своими машинами. С рейсами и выплатами связаны по
+-- имени (sales.carrier_name / cash_expense.carrier_name) — при переименовании логиста имя обновляется и там.
+CREATE TABLE IF NOT EXISTS logists (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  phone TEXT,
+  comment TEXT,
+  -- Начальный долг: положительный — мы должны логисту, отрицательный — он должен нам.
+  initial_debt NUMERIC(16,2) NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS logist_machines (
+  id SERIAL PRIMARY KEY,
+  logist_id INTEGER NOT NULL REFERENCES logists(id) ON DELETE CASCADE,
+  number TEXT UNIQUE NOT NULL,
+  model TEXT,
+  driver TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Корректировка долга логиста: amount > 0 — мы должны ему больше, amount < 0 — меньше. Причина обязательна.
+CREATE TABLE IF NOT EXISTS logist_debt_adjustments (
+  id SERIAL PRIMARY KEY,
+  logist_id INTEGER NOT NULL REFERENCES logists(id) ON DELETE CASCADE,
+  date DATE NOT NULL,
+  amount NUMERIC(16,2) NOT NULL CHECK (amount <> 0),
+  comment TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Корректировка долга клиента: amount > 0 увеличивает долг, amount < 0 уменьшает. Причина обязательна.
 CREATE TABLE IF NOT EXISTS client_debt_adjustments (
   id SERIAL PRIMARY KEY,

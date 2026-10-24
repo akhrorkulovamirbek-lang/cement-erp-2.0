@@ -4,6 +4,7 @@ import { ApiError } from '@/api/client';
 import {
   cementMarksHooks,
   clientsHooks,
+  logistsHooks,
   machinesHooks,
   salesHooks,
   ticketsHooks,
@@ -105,6 +106,7 @@ export function Sales() {
   const tickets = ticketsHooks.useList({ status: 'active' });
   const balance = useWarehouseBalance();
   const suggestions = useSuggestions();
+  const logists = logistsHooks.useList();
   // См. комментарий у аналогичного стейта в Incoming.tsx — без этого Radix Select сбрасывает
   // только что выбранного нового клиента обратно в пустое значение.
   const [justAddedClient, setJustAddedClient] = useState<Client | null>(null);
@@ -148,6 +150,15 @@ export function Sales() {
   // подсказка на фронте, сервер решает окончательно сам.
   const ownMachineNumbers = new Set((machines.data ?? []).map((m) => m.number));
   const logisticsVehicleGuess = machineNumber && ownMachineNumbers.has(normalizePlateNumber(machineNumber)) ? 'OWN' : 'HIRED';
+
+  // Номер машины логиста из справочника → перевозчик подставляется сам.
+  useEffect(() => {
+    if (!machineNumber || vehicleType !== 'HIRED') return;
+    const plate = normalizePlateNumber(machineNumber);
+    const owner = (logists.data ?? []).find((l) => l.machines.includes(plate));
+    if (owner) setValue('carrier_name', owner.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [machineNumber, vehicleType, logists.data]);
 
   useEffect(() => {
     if (saleType === 'LOGISTICS') setValue('vehicle_type', logisticsVehicleGuess);

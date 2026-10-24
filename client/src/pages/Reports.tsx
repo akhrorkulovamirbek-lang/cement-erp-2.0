@@ -308,7 +308,19 @@ function CarriersTab() {
   const rows = report.data ?? [];
 
   const columns: Column<CarrierBalance>[] = [
-    { key: 'name', header: 'Перевозчик', sortValue: (r) => r.name },
+    {
+      key: 'name',
+      header: 'Перевозчик',
+      sortValue: (r) => r.name,
+      render: (r) =>
+        r.logist_id ? (
+          <Link to={`/logists/${r.logist_id}`} className="font-medium text-primary hover:underline">
+            {r.name}
+          </Link>
+        ) : (
+          r.name
+        ),
+    },
     { key: 'owed', header: 'Начислено за рейсы', align: 'right', sortValue: (r) => Number(r.owed), render: (r) => formatMoney(r.owed) },
     { key: 'paid', header: 'Выплачено', align: 'right', sortValue: (r) => Number(r.paid), render: (r) => formatMoney(r.paid) },
     {

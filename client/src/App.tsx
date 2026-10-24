@@ -10,6 +10,7 @@ import { Counterparties } from './pages/Counterparties';
 import { Dashboard } from './pages/Dashboard';
 import { IncomingPage } from './pages/Incoming';
 import { Organizations } from './pages/Organizations';
+import { LogistDetail } from './pages/LogistDetail';
 import { Login } from './pages/Login';
 import { Reports } from './pages/Reports';
 import { Sales } from './pages/Sales';
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/counterparties" element={<RequirePermission resource="references"><Counterparties /></RequirePermission>} />
         <Route path="/clients/:id" element={<RequirePermission resource="references"><ClientDetail /></RequirePermission>} />
         <Route path="/zavody/:id" element={<RequirePermission resource="references"><ZavodDetail /></RequirePermission>} />
+        <Route path="/logists/:id" element={<RequirePermission resource="references"><LogistDetail /></RequirePermission>} />
         <Route path="/vehicles/:number" element={<VehicleDetail />} />
         <Route path="/audit-log" element={<RequirePermission resource="auditLog"><AuditLog /></RequirePermission>} />
         <Route path="/settings" element={<RequirePermission resource="settings"><Settings /></RequirePermission>} />

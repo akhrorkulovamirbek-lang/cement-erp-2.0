@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../../db/pool.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { CARRIER_BALANCES_SQL } from '../../lib/carrierBalances.js';
 import { conflict, notFound } from '../../lib/errors.js';
 import { cashExpenseSchema, cashIncomeSchema } from './schema.js';
 
@@ -193,21 +194,7 @@ cashExpenseRouter.get(
 cashExpenseRouter.get(
   '/carrier-balances',
   asyncHandler(async (_req, res) => {
-    const { rows } = await pool.query(
-      `SELECT carrier_name AS name, SUM(owed) AS owed, SUM(paid) AS paid, SUM(owed) - SUM(paid) AS balance
-       FROM (
-         SELECT carrier_name, SUM(tonnage * hire_price_per_ton) AS owed, 0 AS paid
-         FROM sales WHERE vehicle_type = 'HIRED' AND carrier_name IS NOT NULL
-         GROUP BY carrier_name
-         UNION ALL
-         SELECT carrier_name, 0 AS owed, SUM(CASE WHEN currency = 'USD' THEN amount * usd_rate ELSE amount END) AS paid
-         FROM cash_expense WHERE category = 'перевозчик' AND carrier_name IS NOT NULL
-         GROUP BY carrier_name
-       ) t
-       GROUP BY carrier_name
-       HAVING SUM(owed) - SUM(paid) <> 0
-       ORDER BY balance DESC`,
-    );
+    const { rows } = await pool.query(`SELECT name, owed, paid, balance FROM (${CARRIER_BALANCES_SQL}) c WHERE balance <> 0 ORDER BY balance DESC`);
     res.json(rows);
   }),
 );

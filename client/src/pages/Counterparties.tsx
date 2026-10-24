@@ -1,3 +1,4 @@
+import { LogistsTab } from './Logists';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { ApiError } from '@/api/client';
@@ -35,6 +36,7 @@ export function Counterparties() {
           <TabsTrigger value="clients">Клиенты</TabsTrigger>
           <TabsTrigger value="zavody">Заводы</TabsTrigger>
           <TabsTrigger value="marks">Марки цемента</TabsTrigger>
+          <TabsTrigger value="logists">Логисты</TabsTrigger>
           <TabsTrigger value="machines">Свои машины</TabsTrigger>
           <TabsTrigger value="logistics-expenses">Категории расходов логистики</TabsTrigger>
           <TabsTrigger value="bank-accounts">Банковские счета</TabsTrigger>
@@ -61,6 +63,10 @@ export function Counterparties() {
             useDelete={cementMarksHooks.useDelete}
             displayValue={(r) => r.name}
           />
+        </TabsContent>
+
+        <TabsContent value="logists" className="mt-4">
+          <LogistsTab />
         </TabsContent>
 
         <TabsContent value="machines" className="mt-4">

@@ -24,6 +24,8 @@ import type {
   DebtsSummary,
   ExpenseCategory,
   Incoming,
+  Logist,
+  LogistDetailData,
   Machine,
   ModuleSetting,
   PermissionRoleRow,
@@ -441,4 +443,36 @@ export function useUpdateOrganization() {
       api.put<{ id: number; name: string; active: boolean }>(`/platform/organizations/${id}`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['organizations'] }),
   });
+}
+
+// Логисты (перевозчики с машинами).
+export const logistsHooks = createCrudHooks<Logist, Record<string, unknown>>('logists', '/logists', ['logist-detail', 'suggestions', ...REPORT_KEYS]);
+
+export function useLogistDetail(id: number) {
+  return useQuery({
+    queryKey: ['logist-detail', id],
+    queryFn: () => api.get<LogistDetailData>(`/logists/${id}`),
+    enabled: id > 0,
+  });
+}
+
+export function useLogistAction() {
+  const qc = useQueryClient();
+  const done = () => {
+    for (const key of ['logists', 'logist-detail', ...REPORT_KEYS]) qc.invalidateQueries({ queryKey: [key] });
+  };
+  return {
+    addMachine: useMutation({
+      mutationFn: ({ id, ...data }: { id: number; number: string; model?: string | null; driver?: string | null }) =>
+        api.post(`/logists/${id}/machines`, data),
+      onSuccess: done,
+    }),
+    removeMachine: useMutation({ mutationFn: (machineId: number) => api.delete(`/logists/machines/${machineId}`), onSuccess: done }),
+    addAdjustment: useMutation({
+      mutationFn: ({ id, ...data }: { id: number; date: string; amount: number; comment: string }) =>
+        api.post(`/logists/${id}/adjustments`, data),
+      onSuccess: done,
+    }),
+    removeAdjustment: useMutation({ mutationFn: (adjId: number) => api.delete(`/logists/adjustments/${adjId}`), onSuccess: done }),
+  };
 }

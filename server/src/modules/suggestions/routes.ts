@@ -12,7 +12,8 @@ suggestionsRouter.get(
     const [carriers, plates, payers, expenseTypes, routes] = await Promise.all([
       pool.query(
         `SELECT DISTINCT carrier_name AS v FROM (
-           SELECT carrier_name FROM sales WHERE carrier_name IS NOT NULL AND carrier_name <> ''
+           SELECT name AS carrier_name FROM logists WHERE active = true
+           UNION SELECT carrier_name FROM sales WHERE carrier_name IS NOT NULL AND carrier_name <> ''
            UNION SELECT carrier_name FROM cash_expense WHERE carrier_name IS NOT NULL AND carrier_name <> ''
          ) t ORDER BY v`,
       ),

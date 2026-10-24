@@ -315,6 +315,7 @@ export interface ZavodBalance {
 
 export interface CarrierBalance {
   name: string;
+  logist_id?: number | null;
   owed: string;
   paid: string;
   balance: string;
@@ -408,4 +409,38 @@ export interface ReportSummary {
   warehouseBalance: WarehouseBalance[];
   awaitingShipmentCount: number;
   awaitingShipmentTonnage: number;
+}
+
+export interface Logist {
+  id: number;
+  name: string;
+  phone: string | null;
+  comment: string | null;
+  initial_debt: string;
+  active: boolean;
+  created_at: string;
+  owed: string;
+  paid: string;
+  balance: string;
+  machines: string[];
+}
+
+export interface LogistDetailData {
+  logist: Omit<Logist, 'owed' | 'paid' | 'balance' | 'machines'>;
+  machines: { id: number; number: string; model: string | null; driver: string | null }[];
+  trips: {
+    id: number;
+    date: string;
+    sale_type: 'CEMENT' | 'LOGISTICS';
+    machine_number: string | null;
+    tonnage: string;
+    hire_price_per_ton: string | null;
+    route: string | null;
+    awaiting_shipment: boolean;
+    client_name: string | null;
+    hire_total: string;
+  }[];
+  payments: { id: number; date: string; amount: string; currency: 'UZS' | 'USD'; usd_rate: string | null; payment_type: string; comment: string | null; amount_uzs: string }[];
+  adjustments: { id: number; date: string; amount: string; comment: string }[];
+  summary: { owed: string; paid: string; balance: string };
 }
