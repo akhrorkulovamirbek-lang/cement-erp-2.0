@@ -24,6 +24,7 @@ import { settingsRouter } from './modules/settings/routes.js';
 import { suggestionsRouter } from './modules/suggestions/routes.js';
 import { ticketsRouter } from './modules/tickets/routes.js';
 import { usersRouter } from './modules/users/routes.js';
+import { vehiclesRouter } from './modules/vehicles/routes.js';
 import { warehouseRouter } from './modules/warehouse/routes.js';
 import { zavodyRouter } from './modules/zavody/routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -97,6 +98,7 @@ export function createApp() {
     auditResource('client_adjustment', { table: 'client_debt_adjustments', label: 'Корректировка долга клиента' }),
     clientAdjustmentsRouter,
   );
+  app.use('/api/vehicles', requireAnyPermission('sales', 'reports', 'references'), vehiclesRouter);
   app.use('/api/suggestions', requireAnyPermission('sales', 'cash', 'incoming'), suggestionsRouter);
   app.use('/api/report', requirePermission('reports'), reportsRouter);
 

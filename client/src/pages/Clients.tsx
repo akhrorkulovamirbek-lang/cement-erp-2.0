@@ -189,6 +189,7 @@ export function Clients() {
         getRowId={(r) => r.id}
         onEdit={openEdit}
         onDelete={setDeleting}
+        searchable
       />
 
       {editing && (

@@ -6,6 +6,7 @@ import { Badge } from '@/components/Badge';
 import { RHFButtonGroup } from '@/components/ButtonGroup';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable, type Column } from '@/components/DataTable';
+import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/PageHeader';
 import { SidePanel } from '@/components/SidePanel';
 import { SimpleRefTable } from '@/components/SimpleRefTable';
@@ -74,6 +75,11 @@ export function Counterparties() {
             useUpdate={machinesHooks.useUpdate}
             useDelete={machinesHooks.useDelete}
             displayValue={(r) => r.number}
+            renderValue={(r) => (
+              <Link to={`/vehicles/${encodeURIComponent(r.number)}`} className="font-medium text-primary hover:underline">
+                {r.number}
+              </Link>
+            )}
           />
         </TabsContent>
 
@@ -139,7 +145,7 @@ function LogisticsExpenseCategoriesTab() {
           + Добавить категорию
         </Button>
       </div>
-      <DataTable columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} onEdit={openEdit} />
+      <DataTable columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} onEdit={openEdit} searchable />
 
       {editing && (
         <SidePanel title={editing === 'new' ? 'Новая категория' : 'Изменить категорию'} onClose={() => setEditing(null)}>
@@ -261,7 +267,7 @@ function BankAccountsTab() {
           + Добавить счёт
         </Button>
       </div>
-      <DataTable columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} onEdit={openEdit} onDelete={setDeleting} />
+      <DataTable columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} onEdit={openEdit} onDelete={setDeleting} searchable />
 
       {editing && (
         <SidePanel title={editing === 'new' ? 'Новый счёт' : 'Изменить счёт'} onClose={() => setEditing(null)}>

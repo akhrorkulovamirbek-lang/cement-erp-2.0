@@ -154,7 +154,19 @@ function VehiclesTab() {
   const report = useVehiclesReport({ from: from || undefined, to: to || undefined });
 
   const columns: Column<VehicleReportRow>[] = [
-    { key: 'label', header: 'Машина / Перевозчик', sortValue: (r) => r.label },
+    {
+      key: 'label',
+      header: 'Машина / Перевозчик',
+      sortValue: (r) => r.label,
+      render: (r) =>
+        r.type === 'own' ? (
+          <Link to={`/vehicles/${encodeURIComponent(r.label)}`} className="font-medium text-primary hover:underline">
+            {r.label}
+          </Link>
+        ) : (
+          r.label
+        ),
+    },
     { key: 'trip_count', header: 'Рейсов', align: 'right', sortValue: (r) => r.trip_count },
     {
       key: 'revenue',

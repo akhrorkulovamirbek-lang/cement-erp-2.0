@@ -315,6 +315,8 @@ ALTER TABLE sales ADD COLUMN IF NOT EXISTS is_historical BOOLEAN NOT NULL DEFAUL
 -- «Отложка»: продажа записана (цемент ушёл, остатки списаны), а клиент и цены вносятся позже.
 ALTER TABLE sales ALTER COLUMN client_id DROP NOT NULL;
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS is_deferred BOOLEAN NOT NULL DEFAULT false;
+-- Заказ принят, но ещё не отгружен: только пометка для учёта, склад и долг считаются сразу при записи.
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS awaiting_shipment BOOLEAN NOT NULL DEFAULT false;
 
 DO $$ BEGIN
   ALTER TABLE incoming ADD CONSTRAINT incoming_linked_sale_fk FOREIGN KEY (linked_sale_id) REFERENCES sales(id) ON DELETE SET NULL;

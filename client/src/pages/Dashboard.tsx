@@ -139,7 +139,10 @@ export function Dashboard() {
                   stroke="var(--muted-foreground)"
                   tickFormatter={(v) => formatNumber(v)}
                 />
-                <Tooltip formatter={(v: number) => formatMoney(v)} />
+                <Tooltip
+                  formatter={(v: number) => formatMoney(v)}
+                  contentStyle={{ background: 'var(--popover)', border: '1px solid var(--border)', color: 'var(--popover-foreground)' }}
+                />
                 <Line type="monotone" dataKey="total" stroke="var(--chart-1)" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>

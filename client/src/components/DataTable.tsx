@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, ChevronsUpDown, Pencil, Trash2 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -33,6 +34,9 @@ interface DataTableProps<T> {
   /** Строка итогов внизу таблицы — один элемент на колонку, в том же порядке, что columns.
    * Пропустить ячейку — пустая строка/null. Скрывается сама при загрузке/пустом списке. */
   footer?: ReactNode[];
+  /** Строка поиска над таблицей: ищет по всем текстовым и числовым полям записи. */
+  searchable?: boolean;
+  searchPlaceholder?: string;
 }
 
 export function DataTable<T>({
@@ -45,14 +49,27 @@ export function DataTable<T>({
   extraRowAction,
   getRowId,
   footer,
+  searchable,
+  searchPlaceholder = 'Поиск…',
 }: DataTableProps<T>) {
+  const [query, setQuery] = useState('');
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!searchable || !q) return rows;
+    return rows.filter((row) =>
+      Object.values(row as Record<string, unknown>).some(
+        (v) => (typeof v === 'string' || typeof v === 'number') && String(v).toLowerCase().includes(q),
+      ),
+    );
+  }, [rows, query, searchable]);
+
   const sorted = useMemo(() => {
-    if (!sort) return rows;
+    if (!sort) return filtered;
     const col = columns.find((c) => c.key === sort.key);
-    if (!col?.sortValue) return rows;
-    const copy = [...rows];
+    if (!col?.sortValue) return filtered;
+    const copy = [...filtered];
     copy.sort((a, b) => {
       const av = col.sortValue!(a);
       const bv = col.sortValue!(b);
@@ -61,7 +78,7 @@ export function DataTable<T>({
       return sort.dir === 'asc' ? cmp : -cmp;
     });
     return copy;
-  }, [rows, sort, columns]);
+  }, [filtered, sort, columns]);
 
   const hasActions = Boolean(onEdit || onDelete || extraRowAction);
 
@@ -77,6 +94,14 @@ export function DataTable<T>({
 
   return (
     <>
+    {searchable && (
+      <Input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={searchPlaceholder}
+        className="mb-3 w-full sm:max-w-xs"
+      />
+    )}
     {/* Телефон: каждая запись — карточка «поле: значение», а не широкая таблица с прокруткой. */}
     <div className="space-y-2 md:hidden">
       {loading && <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">Загрузка…</div>}

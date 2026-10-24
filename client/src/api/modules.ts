@@ -117,6 +117,60 @@ export function useBrokerAccount() {
 }
 
 // Пополнение брокерского счёта теперь ещё и расход кассы (category='брокер') — обновляем и кассу.
+export interface VehicleHistory {
+  number: string;
+  machine: { id: number; number: string; model: string | null; driver: string | null; capacity_tons: string | null; active: boolean } | null;
+  carriers: string[];
+  trips: {
+    id: number;
+    date: string;
+    sale_type: 'CEMENT' | 'LOGISTICS';
+    vehicle_type: 'CLIENT' | 'OWN' | 'HIRED';
+    tonnage: string;
+    freight_price_per_ton: string | null;
+    hire_price_per_ton: string | null;
+    carrier_name: string | null;
+    route: string | null;
+    total_sum: string;
+    awaiting_shipment: boolean;
+    client_name: string | null;
+    zavod_name: string | null;
+    cement_mark_name: string | null;
+  }[];
+  expenses: {
+    id: number;
+    date: string;
+    category: string;
+    expense_type: string | null;
+    amount: string;
+    currency: 'UZS' | 'USD';
+    usd_rate: string | null;
+    payment_type: string;
+    comment: string | null;
+    amount_uzs: string;
+  }[];
+  summary: { tripCount: number; tonnage: number; revenue: number; hireCost: number; expensesTotal: number; margin: number };
+}
+
+export function useVehicleHistory(number: string) {
+  return useQuery({
+    queryKey: ['vehicle-history', number],
+    queryFn: () => api.get<VehicleHistory>(`/vehicles/${encodeURIComponent(number)}/history`),
+    enabled: number.length > 0,
+  });
+}
+
+export function useShipSale() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.post<unknown>(`/sales/${id}/ship`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sales'] });
+      qc.invalidateQueries({ queryKey: ['vehicle-history'] });
+    },
+  });
+}
+
 export function useReplenishBroker() {
   const qc = useQueryClient();
   return useMutation({

@@ -14,6 +14,7 @@ import { Login } from './pages/Login';
 import { Reports } from './pages/Reports';
 import { Sales } from './pages/Sales';
 import { Settings } from './pages/Settings';
+import { VehicleDetail } from './pages/VehicleDetail';
 import { ZavodDetail } from './pages/ZavodDetail';
 
 /** Владелец платформы видит только «Организации»; сотрудники организации — свои разделы. */
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/counterparties" element={<RequirePermission resource="references"><Counterparties /></RequirePermission>} />
         <Route path="/clients/:id" element={<RequirePermission resource="references"><ClientDetail /></RequirePermission>} />
         <Route path="/zavody/:id" element={<RequirePermission resource="references"><ZavodDetail /></RequirePermission>} />
+        <Route path="/vehicles/:number" element={<VehicleDetail />} />
         <Route path="/audit-log" element={<RequirePermission resource="auditLog"><AuditLog /></RequirePermission>} />
         <Route path="/settings" element={<RequirePermission resource="settings"><Settings /></RequirePermission>} />
       </Route>

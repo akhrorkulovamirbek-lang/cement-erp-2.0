@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useMyPermissions } from '@/api/modules';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import {
   Sidebar,
@@ -107,6 +108,9 @@ export function AppLayout() {
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger />
           <span className="text-sm font-semibold md:hidden">{organizationName ?? 'Cement ERP'}</span>
+          <div className="ml-auto">
+            <ThemeToggle />
+          </div>
         </header>
         <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
           <div className="mx-auto max-w-7xl p-4 sm:p-6">

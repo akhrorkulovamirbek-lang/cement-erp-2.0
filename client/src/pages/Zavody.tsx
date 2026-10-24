@@ -174,6 +174,7 @@ export function Zavody() {
         getRowId={(r) => r.id}
         onEdit={openEdit}
         onDelete={setDeleting}
+        searchable
       />
 
       {editing && (

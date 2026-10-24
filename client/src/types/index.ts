@@ -230,6 +230,7 @@ export interface Sale {
   client_id: number | null;
   client_name: string | null;
   is_deferred: boolean;
+  awaiting_shipment: boolean;
   source: 'warehouse' | 'ticket' | 'direct' | null;
   zavod_id: number | null;
   zavod_name: string | null;

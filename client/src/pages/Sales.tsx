@@ -1,7 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { ApiError } from '@/api/client';
-import { cementMarksHooks, clientsHooks, machinesHooks, salesHooks, ticketsHooks, useSuggestions, useWarehouseBalance, zavodyHooks } from '@/api/modules';
+import {
+  cementMarksHooks,
+  clientsHooks,
+  machinesHooks,
+  salesHooks,
+  ticketsHooks,
+  useShipSale,
+  useSuggestions,
+  useWarehouseBalance,
+  zavodyHooks,
+} from '@/api/modules';
+import { Link } from 'react-router-dom';
 import { Badge } from '@/components/Badge';
 import { RHFButtonGroup } from '@/components/ButtonGroup';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -21,6 +32,7 @@ import type { Client, Sale } from '@/types';
 
 interface FormValues {
   is_deferred: boolean;
+  awaiting_shipment: boolean;
   sale_type: 'CEMENT' | 'LOGISTICS';
   date: string;
   client_id: string;
@@ -43,6 +55,7 @@ interface FormValues {
 
 const emptyForm = (): FormValues => ({
   is_deferred: false,
+  awaiting_shipment: false,
   sale_type: 'CEMENT',
   date: todayISO(),
   client_id: '',
@@ -69,14 +82,18 @@ export function Sales() {
   const [to, setTo] = useState('');
   const [clientFilter, setClientFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
-  const [deferredFilter, setDeferredFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [q, setQ] = useState('');
   const list = salesHooks.useList({
     from: from || undefined,
     to: to || undefined,
     client_id: clientFilter || undefined,
     sale_type: typeFilter || undefined,
-    deferred: deferredFilter || undefined,
+    deferred: statusFilter === 'deferred' ? '1' : undefined,
+    awaiting: statusFilter === 'awaiting' ? '1' : undefined,
+    q: q || undefined,
   });
+  const ship = useShipSale();
   const create = salesHooks.useCreate();
   const update = salesHooks.useUpdate();
   const del = salesHooks.useDelete();
@@ -147,6 +164,7 @@ export function Sales() {
     }
     reset({
       is_deferred: row.is_deferred,
+      awaiting_shipment: row.awaiting_shipment,
       sale_type: row.sale_type,
       date: row.date,
       client_id: row.client_id ? String(row.client_id) : '',
@@ -174,6 +192,7 @@ export function Sales() {
       sale_type: data.sale_type,
       date: data.date,
       is_deferred: data.is_deferred,
+      awaiting_shipment: data.awaiting_shipment,
       client_id: data.client_id ? Number(data.client_id) : null,
       source: data.sale_type === 'CEMENT' ? data.source : null,
       ticket_id: data.sale_type === 'CEMENT' && data.source === 'ticket' ? Number(data.ticket_id) : null,
@@ -209,6 +228,15 @@ export function Sales() {
     }
   }
 
+  async function onShip(row: Sale) {
+    try {
+      await ship.mutateAsync(row.id);
+      notify('Заказ отгружен');
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : 'Ошибка', 'error');
+    }
+  }
+
   async function onDelete() {
     if (!deleting) return;
     try {
@@ -231,6 +259,11 @@ export function Sales() {
       key: 'sale_type',
       header: 'Тип',
       render: (r) => (r.sale_type === 'CEMENT' ? <Badge tone="slate">Цемент</Badge> : <Badge tone="blue">Логистика</Badge>),
+    },
+    {
+      key: 'awaiting_shipment',
+      header: 'Статус',
+      render: (r) => (r.awaiting_shipment ? <Badge tone="amber">Ждёт отгрузки</Badge> : ''),
     },
     {
       key: 'client_name',
@@ -274,7 +307,19 @@ export function Sales() {
       header: 'Машина',
       render: (r) => {
         const plate = r.machine_number ?? r.own_vehicle_number;
-        return `${VEHICLE_TYPE_LABELS[r.vehicle_type]}${plate ? ` · ${plate}` : ''}`;
+        return (
+          <>
+            {VEHICLE_TYPE_LABELS[r.vehicle_type]}
+            {plate && (
+              <>
+                {' · '}
+                <Link to={`/vehicles/${encodeURIComponent(plate)}`} className="text-primary hover:underline">
+                  {plate}
+                </Link>
+              </>
+            )}
+          </>
+        );
       },
     },
   ];
@@ -283,7 +328,7 @@ export function Sales() {
     <div>
       <PageHeader title="Продажи" subtitle="Цемент и логистика — единая форма" action={<Button onClick={openNew}>+ Новая продажа</Button>} />
 
-      <FilterBar from={from} to={to} onFromChange={setFrom} onToChange={setTo}>
+      <FilterBar from={from} to={to} onFromChange={setFrom} onToChange={setTo} q={q} onQChange={setQ} qPlaceholder="Поиск по машине…">
         <PlainSelect
           value={clientFilter}
           onValueChange={setClientFilter}
@@ -299,18 +344,19 @@ export function Sales() {
           options={[{ value: '', label: 'Все типы' }, ...SALE_TYPE_OPTIONS]}
         />
         <PlainSelect
-          value={deferredFilter}
-          onValueChange={setDeferredFilter}
+          value={statusFilter}
+          onValueChange={setStatusFilter}
           className="w-full sm:w-48"
           placeholder="Все продажи"
           options={[
             { value: '', label: 'Все продажи' },
-            { value: '1', label: 'Только отложенные' },
+            { value: 'awaiting', label: 'Ждут отгрузки' },
+            { value: 'deferred', label: 'Только отложенные' },
           ]}
         />
       </FilterBar>
 
-      <DataTable columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} onEdit={openEdit} onDelete={(r) => (r.source === 'direct' ? notify('Эта продажа связана с приходом «Напрямую» — удалите её через Приход', 'error') : setDeleting(r))} />
+      <DataTable columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} extraRowAction={(r) => (r.awaiting_shipment ? <Button variant="outline" size="sm" onClick={() => onShip(r)}>Отгрузить</Button> : null)} onEdit={openEdit} onDelete={(r) => (r.source === 'direct' ? notify('Эта продажа связана с приходом «Напрямую» — удалите её через Приход', 'error') : setDeleting(r))} />
 
       {editing && (
         <SidePanel title={editing === 'new' ? 'Новая продажа' : 'Изменить продажу'} onClose={() => setEditing(null)} widthClass="sm:max-w-xl">
@@ -319,7 +365,9 @@ export function Sales() {
               <RHFButtonGroup control={control} name="sale_type" options={SALE_TYPE_OPTIONS} disabled={editing !== 'new'} />
             </FormRow>
 
-            <div className="rounded-md border border-amber-300 bg-amber-50 p-3">
+            <RHFCheckbox control={control} name="awaiting_shipment" label="Заказ принят, ещё не отгружен" />
+
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950/40">
               <RHFCheckbox control={control} name="is_deferred" label="Отложить: клиента и цену внесу позже" />
               <p className="mt-1 text-xs text-muted-foreground">
                 {isDeferred

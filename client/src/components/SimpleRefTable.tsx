@@ -1,5 +1,5 @@
 import type { UseMutationResult } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { ApiError } from '@/api/client';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -25,6 +25,8 @@ interface SimpleRefTableProps<T extends Entity, TInput extends Record<string, un
   useUpdate: () => UseMutationResult<T, unknown, { id: number; data: TInput }>;
   useDelete: () => UseMutationResult<void, unknown, number>;
   displayValue: (row: T) => string;
+  /** Как показать значение в таблице (например, ссылкой); по умолчанию — displayValue. */
+  renderValue?: (row: T) => ReactNode;
   extraColumns?: Column<T>[];
 }
 
@@ -39,6 +41,7 @@ export function SimpleRefTable<T extends Entity, TInput extends Record<string, u
   useUpdate,
   useDelete,
   displayValue,
+  renderValue,
   extraColumns = [],
 }: SimpleRefTableProps<T, TInput>) {
   const { notify } = useToast();
@@ -87,7 +90,7 @@ export function SimpleRefTable<T extends Entity, TInput extends Record<string, u
   }
 
   const columns: Column<T>[] = [
-    { key: fieldName, header: fieldLabel, render: displayValue, sortValue: displayValue },
+    { key: fieldName, header: fieldLabel, render: renderValue ?? displayValue, sortValue: displayValue },
     ...extraColumns,
   ];
 
@@ -106,6 +109,7 @@ export function SimpleRefTable<T extends Entity, TInput extends Record<string, u
         getRowId={(r) => r.id}
         onEdit={openEdit}
         onDelete={setDeleting}
+        searchable
       />
 
       {editing && (

@@ -9,6 +9,7 @@ const baseSaleSchema = z.object({
   client_id: z.coerce.number().int().positive('Выберите клиента').optional().nullable(),
   // «Отложка»: клиента и цены можно внести позже.
   is_deferred: z.coerce.boolean().default(false),
+  awaiting_shipment: z.coerce.boolean().default(false),
   comment: z.string().trim().optional().nullable().default(null),
 
   // Цемент (раздел 3.1 ТЗ):
