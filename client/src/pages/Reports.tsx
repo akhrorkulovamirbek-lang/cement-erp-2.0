@@ -138,6 +138,7 @@ function CementTab() {
         loading={report.isLoading}
         getRowId={(r) => `${r.zavod_name}-${r.cement_mark_name}-${r.packaging}`}
         emptyMessage="Нет данных за период"
+        searchable
         footer={[
           'Итого',
           '',
@@ -221,6 +222,7 @@ function VehiclesTab() {
         loading={report.isLoading}
         getRowId={(r) => `${r.type}-${r.label}`}
         emptyMessage="Нет рейсов за период"
+        searchable
         footer={[
           'Итого',
           '',
@@ -295,6 +297,7 @@ function ClientsTab() {
       loading={balances.isLoading}
       getRowId={(r) => r.id}
       emptyMessage="Нет клиентов"
+      searchable
       footer={[
         'Итого',
         formatMoney(totals.purchased),
@@ -472,6 +475,7 @@ function CarriersTab() {
       loading={report.isLoading}
       getRowId={(r) => r.name}
       emptyMessage="Перевозчиков пока нет"
+      searchable
       footer={[
         'Итого',
         formatMoney(totals.owed),
