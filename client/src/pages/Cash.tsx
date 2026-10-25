@@ -321,11 +321,29 @@ export function Cash() {
     }
   }
 
+  const counterpartyText = (r: CashRow): string => {
+    if (r.kind === 'info') return r.ticket_number ? `Тикет ${r.ticket_number} → брокерский счёт` : 'Брокерский счёт';
+    if (r.kind === 'income') {
+      const name = r.client_name || '—';
+      return r.payer_name ? `${name} (${r.payer_name})` : name;
+    }
+    if (r.category === 'брокер') return 'Брокерский счёт';
+    if (r.category === 'контрагент') return r.client_name || '—';
+    return r.zavod_name || r.carrier_name || r.machine_number || '—';
+  };
+  const categoryText = (r: CashRow): string => {
+    if (r.kind === 'info') return 'Возврат тикета';
+    if (r.kind === 'expense' && r.category === 'брокер') return 'Пополнение брокерского счёта';
+    if (r.kind === 'expense' && r.category === 'контрагент') return 'Оплата поставщику';
+    return r.category;
+  };
+
   const columns: Column<CashRow>[] = [
     { key: 'date', header: 'Дата', sortValue: (r) => r.date, render: (r) => formatDate(r.date) },
     {
       key: 'kind',
       header: 'Тип',
+      sortValue: (r) => (r.kind === 'info' ? 'Информация' : r.kind === 'income' ? 'Приход' : 'Расход'),
       render: (r) => {
         if (r.kind === 'info') return <Badge tone="blue">Информация</Badge>;
         return r.kind === 'income' ? <Badge tone="green">Приход</Badge> : <Badge tone="red">Расход</Badge>;
@@ -334,26 +352,14 @@ export function Cash() {
     {
       key: 'category',
       header: 'Категория',
-      render: (r) => {
-        if (r.kind === 'info') return 'Возврат тикета';
-        if (r.kind === 'expense' && r.category === 'брокер') return 'Пополнение брокерского счёта';
-        if (r.kind === 'expense' && r.category === 'контрагент') return 'Оплата поставщику';
-        return r.category;
-      },
+      sortValue: categoryText,
+      render: categoryText,
     },
     {
       key: 'counterparty',
       header: 'Контрагент',
-      render: (r) => {
-        if (r.kind === 'info') return r.ticket_number ? `Тикет ${r.ticket_number} → брокерский счёт` : 'Брокерский счёт';
-        if (r.kind === 'income') {
-          const name = r.client_name || '—';
-          return r.payer_name ? `${name} (${r.payer_name})` : name;
-        }
-        if (r.category === 'брокер') return 'Брокерский счёт';
-        if (r.category === 'контрагент') return r.client_name || '—';
-        return r.zavod_name || r.carrier_name || r.machine_number || '—';
-      },
+      sortValue: counterpartyText,
+      render: counterpartyText,
     },
     {
       key: 'amount',
@@ -377,7 +383,7 @@ export function Cash() {
         </div>
         ),
     },
-    { key: 'payment_type', header: 'Способ', render: (r) => (r.kind === 'info' ? '—' : r.payment_type) },
+    { key: 'payment_type', header: 'Способ', sortValue: (r) => (r.kind === 'info' ? '—' : r.payment_type), render: (r) => (r.kind === 'info' ? '—' : r.payment_type) },
     {
       key: 'comment',
       header: 'Комментарий',
@@ -423,6 +429,8 @@ export function Cash() {
         rows={rows}
         loading={incomeList.isLoading || expenseList.isLoading}
         getRowId={(r) => `${r.kind}-${r.id}`}
+        searchable
+        searchPlaceholder="Поиск по контрагенту, комментарию, сумме…"
         onEdit={openEdit}
         onDelete={(row) => {
           const reason = readOnlyReason(row);
