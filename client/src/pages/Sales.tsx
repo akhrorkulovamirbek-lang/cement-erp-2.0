@@ -354,17 +354,16 @@ export function Sales() {
     },
   ];
 
-  const saleRows = list.data ?? [];
-  const sumOf = (f: (r: Sale) => number) => saleRows.reduce((s, r) => s + f(r), 0);
-  // Итоги по тем продажам, что сейчас показаны (с учётом периода и фильтров).
-  const salesFooter: ReactNode[] = columns.map((col) => {
-    if (col.key === 'date') return 'Итого';
-    if (col.key === 'tonnage') return `${formatNumber(sumOf((r) => Number(r.tonnage)), 3)} т`;
-    if (col.key === 'total_sum') return formatMoney(sumOf((r) => Number(r.total_sum)));
-    if (col.key === 'margin_total') return formatMoney(sumOf((r) => (r.sale_type === 'CEMENT' ? Number(r.margin_total) : 0)));
-    return null;
-  });
-
+  const salesFooter = (vis: Sale[]): ReactNode[] => {
+    const sumOf = (f: (r: Sale) => number) => vis.reduce((s, r) => s + f(r), 0);
+    return columns.map((col) => {
+      if (col.key === 'date') return 'Итого';
+      if (col.key === 'tonnage') return `${formatNumber(sumOf((r) => Number(r.tonnage)), 3)} т`;
+      if (col.key === 'total_sum') return formatMoney(sumOf((r) => Number(r.total_sum)));
+      if (col.key === 'margin_total') return formatMoney(sumOf((r) => (r.sale_type === 'CEMENT' ? Number(r.margin_total) : 0)));
+      return null;
+    });
+  };
   return (
     <div>
       <PageHeader title="Продажи" subtitle="Цемент и логистика — единая форма" action={<Button onClick={openNew}>+ Новая продажа</Button>} />

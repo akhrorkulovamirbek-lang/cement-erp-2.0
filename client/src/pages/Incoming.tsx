@@ -461,12 +461,13 @@ export function IncomingPage() {
   const sellDirect = warehouse === 'DIRECT' || (warehouse === 'CLIENT_GOODS' && directSaleWatch);
   const incomingRows = list.data ?? [];
   // Итоги по приходам, что сейчас показаны в истории (с учётом периода и фильтров).
-  const incomingFooter: ReactNode[] = columns.map((col) => {
-    if (col.key === 'date') return 'Итого';
-    if (col.key === 'tonnage') return `${formatNumber(incomingRows.reduce((s, r) => s + Number(r.tonnage), 0), 3)} т`;
-    if (col.key === 'total_sum') return formatMoney(incomingRows.reduce((s, r) => s + Number(r.total_sum), 0));
-    return null;
-  });
+  const incomingFooter = (vis: typeof incomingRows): ReactNode[] =>
+    columns.map((col) => {
+      if (col.key === 'date') return 'Итого';
+      if (col.key === 'tonnage') return `${formatNumber(vis.reduce((s, r) => s + Number(r.tonnage), 0), 3)} т`;
+      if (col.key === 'total_sum') return formatMoney(vis.reduce((s, r) => s + Number(r.total_sum), 0));
+      return null;
+    });
 
   return (
     <div>

@@ -117,7 +117,7 @@ function CementTab() {
   ];
 
   const rows = report.data ?? [];
-  const totals = rows.reduce(
+  const totalsOf = (rs: CementReportRow[]) => rs.reduce(
     (acc, r) => ({
       purchased_tonnage: acc.purchased_tonnage + Number(r.purchased_tonnage),
       purchased_sum: acc.purchased_sum + Number(r.purchased_sum),
@@ -139,7 +139,7 @@ function CementTab() {
         getRowId={(r) => `${r.zavod_name}-${r.cement_mark_name}-${r.packaging}`}
         emptyMessage="Нет данных за период"
         searchable
-        footer={[
+        footer={(vis) => { const totals = totalsOf(vis); return [
           'Итого',
           '',
           '',
@@ -149,7 +149,7 @@ function CementTab() {
           formatNumber(totals.sold_tonnage, 3),
           formatMoney(totals.sold_sum),
           formatMoney(totals.margin_total),
-        ]}
+        ]; }}
       />
     </div>
   );
@@ -203,7 +203,7 @@ function VehiclesTab() {
   ];
 
   const rows = report.data ?? [];
-  const totals = rows.reduce(
+  const totalsOf = (rs: VehicleReportRow[]) => rs.reduce(
     (acc, r) => ({
       trip_count: acc.trip_count + r.trip_count,
       revenue: acc.revenue + Number(r.revenue),
@@ -223,7 +223,7 @@ function VehiclesTab() {
         getRowId={(r) => `${r.type}-${r.label}`}
         emptyMessage="Нет рейсов за период"
         searchable
-        footer={[
+        footer={(vis) => { const totals = totalsOf(vis); return [
           'Итого',
           '',
           String(totals.trip_count),
@@ -232,7 +232,7 @@ function VehiclesTab() {
           <span key="margin" className={totals.margin >= 0 ? 'font-medium text-emerald-600' : 'font-medium text-destructive'}>
             {formatMoney(totals.margin)}
           </span>,
-        ]}
+        ]; }}
       />
     </div>
   );
@@ -281,7 +281,7 @@ function ClientsTab() {
   ];
 
   const rows = balances.data ?? [];
-  const totals = rows.reduce(
+  const totalsOf = (rs: ClientBalance[]) => rs.reduce(
     (acc, r) => ({
       purchased: acc.purchased + Number(r.purchased),
       paid: acc.paid + Number(r.paid),
@@ -298,14 +298,14 @@ function ClientsTab() {
       getRowId={(r) => r.id}
       emptyMessage="Нет клиентов"
       searchable
-      footer={[
+      footer={(vis) => { const totals = totalsOf(vis); return [
         'Итого',
         formatMoney(totals.purchased),
         formatMoney(totals.paid),
         <span key="balance" className={totals.balance > 0 ? 'font-semibold text-destructive' : 'font-semibold'}>
           {formatMoney(totals.balance)}
         </span>,
-      ]}
+      ]; }}
     />
   );
 }
@@ -413,15 +413,19 @@ function SuppliersTab() {
         getRowId={(r) => `${r.type}-${r.id}`}
         emptyMessage="Поставщиков пока нет"
         searchable
-        footer={[
-          'Итого',
-          `${formatNumber(totals.tonnage, 2)} т`,
-          formatMoney(totals.received),
-          formatMoney(totals.sold),
-          formatMoney(totals.paidUs),
-          formatMoney(totals.paidHim),
-          totals.owe < 0 ? `Должны нам ${formatMoney(-totals.owe)}` : `Мы должны ${formatMoney(totals.owe)}`,
-        ]}
+        footer={(vis) => {
+          const t = (f: (r: SupplierReportRow) => number) => vis.reduce((a, r) => a + f(r), 0);
+          const owe = t((r) => Number(r.we_owe));
+          return [
+            'Итого',
+            `${formatNumber(t((r) => Number(r.received_tonnage)), 2)} т`,
+            formatMoney(t((r) => Number(r.received_sum))),
+            formatMoney(t((r) => Number(r.sold_sum))),
+            formatMoney(t((r) => Number(r.paid_by_us))),
+            formatMoney(t((r) => Number(r.paid_by_him))),
+            owe < 0 ? `Должны нам ${formatMoney(-owe)}` : `Мы должны ${formatMoney(owe)}`,
+          ];
+        }}
       />
     </div>
   );
@@ -463,7 +467,7 @@ function CarriersTab() {
     },
   ];
 
-  const totals = rows.reduce(
+  const totalsOf = (rs: CarrierBalance[]) => rs.reduce(
     (acc, r) => ({ owed: acc.owed + Number(r.owed), paid: acc.paid + Number(r.paid), balance: acc.balance + Number(r.balance) }),
     { owed: 0, paid: 0, balance: 0 },
   );
@@ -476,12 +480,12 @@ function CarriersTab() {
       getRowId={(r) => r.name}
       emptyMessage="Перевозчиков пока нет"
       searchable
-      footer={[
+      footer={(vis) => { const totals = totalsOf(vis); return [
         'Итого',
         formatMoney(totals.owed),
         formatMoney(totals.paid),
         totals.balance < 0 ? `Должны нам ${formatMoney(-totals.balance)}` : `Мы должны ${formatMoney(totals.balance)}`,
-      ]}
+      ]; }}
     />
   );
 }
