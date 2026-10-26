@@ -8,6 +8,8 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { badRequest, notFound } from '../../lib/errors.js';
 import { requirePermission } from '../../middleware/permission.js';
 import { saleSchema } from '../sales/schema.js';
+import { incomingSchema } from '../incoming/schema.js';
+import { createIncoming } from '../incoming/service.js';
 import { createSale } from '../sales/service.js';
 import { notifyManager, tg } from './telegram.js';
 
@@ -44,8 +46,15 @@ botRouter.post(
       if (!request) throw notFound('Заявка не найдена');
       if (request.status !== 'pending') throw badRequest('Эта заявка уже обработана');
       // Данные могли устареть (например, клиента удалили) — проверяем по тем же правилам, что и обычную продажу.
-      const data = saleSchema.parse({ ...request.payload, date: request.payload.date, awaiting_shipment: true });
-      const sale = await createSale(client, data);
+      let sale: { id: number };
+      if (request.payload.warehouse === 'DIRECT') {
+        // Прямая продажа: приход «Напрямую» + привязанная продажа клиенту, которая ждёт погрузки.
+        const incoming = await createIncoming(client, incomingSchema.parse(request.payload));
+        await client.query('UPDATE sales SET awaiting_shipment = true WHERE id = $1', [incoming.linked_sale_id]);
+        sale = { id: incoming.linked_sale_id };
+      } else {
+        sale = await createSale(client, saleSchema.parse({ ...request.payload, awaiting_shipment: true }));
+      }
       await client.query(
         `UPDATE sale_requests SET status = 'approved', sale_id = $1, decided_by = $2, decided_at = now() WHERE id = $3`,
         [sale.id, req.user!.userId, id],

@@ -1,4 +1,5 @@
 import { pool } from '../../db/pool.js';
+import { incomingSchema } from '../incoming/schema.js';
 import { saleSchema } from '../sales/schema.js';
 import { keyboard, tg, type Button } from './telegram.js';
 
@@ -27,6 +28,7 @@ const FIELD_TITLES: Record<string, string> = {
   packaging: 'Упаковка',
   tonnage: 'Тоннаж, т',
   price_per_ton: 'Цена за тонну, сум',
+  sale_price_per_ton: 'Цена продажи клиенту за тонну, сум',
   vehicle_type: 'Машина',
   machine_number: 'Номер машины',
   own_vehicle_id: 'Своя машина',
@@ -39,8 +41,10 @@ const FIELD_TITLES: Record<string, string> = {
 function nextField(d: Data): string | null {
   if (!d.sale_type) return 'sale_type';
   if (!d.client_id) return 'client_id';
-  if (d.sale_type === 'CEMENT') {
-    for (const f of ['zavod_id', 'factory_id', 'cement_mark_id', 'packaging', 'tonnage', 'price_per_ton']) {
+  if (d.sale_type === 'CEMENT' || d.sale_type === 'DIRECT') {
+    const fields = ['zavod_id', 'factory_id', 'cement_mark_id', 'packaging', 'tonnage', 'price_per_ton'];
+    if (d.sale_type === 'DIRECT') fields.push('sale_price_per_ton');
+    for (const f of fields) {
       if (d[f] == null) return f;
     }
   } else if (d.tonnage == null) {
@@ -58,7 +62,7 @@ function nextField(d: Data): string | null {
   return null;
 }
 
-const NUMBER_FIELDS = new Set(['tonnage', 'price_per_ton', 'freight_price_per_ton', 'hire_price_per_ton']);
+const NUMBER_FIELDS = new Set(['tonnage', 'price_per_ton', 'sale_price_per_ton', 'freight_price_per_ton', 'hire_price_per_ton']);
 const TEXT_FIELDS = new Set(['machine_number', 'carrier_name', 'comment']);
 
 function parseNumber(text: string): number | null {
@@ -115,14 +119,15 @@ async function ask(ctx: Ctx, telegramId: number, state: State) {
   }
   state.awaiting = field;
   await saveState(telegramId, state);
-  const title = FIELD_TITLES[field];
+  const title = field === 'price_per_ton' && state.data.sale_type === 'DIRECT' ? 'Цена закупки у поставщика за тонну, сум' : FIELD_TITLES[field];
 
   if (field === 'sale_type') {
     await ctx.say('Что продаём?', [
       [
-        { text: 'Цемент', data: 's:sale_type:CEMENT' },
-        { text: 'Логистика', data: 's:sale_type:LOGISTICS' },
+        { text: 'Цемент со склада', data: 's:sale_type:CEMENT' },
+        { text: 'Напрямую', data: 's:sale_type:DIRECT' },
       ],
+      [{ text: 'Логистика', data: 's:sale_type:LOGISTICS' }],
       CANCEL_ROW,
     ]);
   } else if (field === 'client_id') {
@@ -151,7 +156,7 @@ async function ask(ctx: Ctx, telegramId: number, state: State) {
     ]);
   } else if (field === 'vehicle_type') {
     const opts: Button[] = [
-      ...(state.data.sale_type === 'CEMENT' ? [{ text: 'Машина клиента', data: 's:vehicle_type:CLIENT' }] : []),
+      ...(state.data.sale_type !== 'LOGISTICS' ? [{ text: 'Машина клиента', data: 's:vehicle_type:CLIENT' }] : []),
       { text: 'Своя', data: 's:vehicle_type:OWN' },
       { text: 'Наёмная', data: 's:vehicle_type:HIRED' },
     ];
@@ -174,9 +179,9 @@ function summaryText(state: State): string {
     if (value !== null && value !== undefined && value !== '') lines.push(`${label}: ${value}`);
   };
   const fmt = (v: unknown) => Number(v).toLocaleString('ru-RU');
-  add('Тип', d.sale_type === 'CEMENT' ? 'Цемент' : 'Логистика');
+  add('Тип', d.sale_type === 'CEMENT' ? 'Цемент со склада' : d.sale_type === 'DIRECT' ? 'Напрямую от поставщика' : 'Логистика');
   add('Клиент', state.names.client_id);
-  if (d.sale_type === 'CEMENT') {
+  if (d.sale_type !== 'LOGISTICS') {
     add('Поставщик', state.names.zavod_id);
     add('Завод', state.names.factory_id);
     add('Марка', state.names.cement_mark_id);
@@ -184,6 +189,10 @@ function summaryText(state: State): string {
   }
   add('Тоннаж', d.tonnage != null ? `${fmt(d.tonnage)} т` : null);
   if (d.sale_type === 'CEMENT') add('Цена за тонну', d.price_per_ton != null ? `${fmt(d.price_per_ton)} сум` : null);
+  if (d.sale_type === 'DIRECT') {
+    add('Цена закупки', d.price_per_ton != null ? `${fmt(d.price_per_ton)} сум` : null);
+    add('Цена продажи', d.sale_price_per_ton != null ? `${fmt(d.sale_price_per_ton)} сум` : null);
+  }
   add('Машина', VEHICLE_LABELS[String(d.vehicle_type)]);
   add('Номер', d.vehicle_type === 'OWN' ? state.names.own_vehicle_id : d.machine_number);
   add('Перевозчик', d.carrier_name);
@@ -230,7 +239,28 @@ async function submit(ctx: Ctx, telegramId: number, manager: { id: number; name:
       price_per_ton: d.price_per_ton,
     });
   }
-  const check = saleSchema.safeParse(payload);
+  let check: { success: true } | { success: false; error: { issues: { message: string }[] } };
+  if (d.sale_type === 'DIRECT') {
+    // Прямая продажа оформляется приходом «Напрямую»: к нему система сама привязывает продажу клиенту.
+    for (const k of ['source', 'date']) delete payload[k];
+    Object.assign(payload, {
+      date: todayTashkent(),
+      warehouse: 'DIRECT',
+      zavod_id: d.zavod_id,
+      factory_id: d.factory_id,
+      cement_mark_id: d.cement_mark_id,
+      packaging: d.packaging,
+      price_per_ton: d.price_per_ton,
+      sale_price_per_ton: d.sale_price_per_ton,
+      sale_machine_number: d.vehicle_type === 'OWN' ? null : (d.machine_number ?? null),
+      machine_number: null,
+    });
+    delete payload.sale_type;
+    delete payload.awaiting_shipment;
+    check = incomingSchema.safeParse(payload);
+  } else {
+    check = saleSchema.safeParse(payload);
+  }
   if (!check.success) {
     await ctx.say(`Заявка заполнена не полностью: ${check.error.issues[0]?.message ?? 'проверьте данные'}. Начните заново: /start`);
     await saveState(telegramId, null);
