@@ -563,3 +563,11 @@ export function useDeleteBotManager() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['bot-managers'] }),
   });
 }
+
+export function useSubmitQuickOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) => api.post<{ id: number }>('/bot/requests', data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bot-requests'] }),
+  });
+}

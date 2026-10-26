@@ -1,13 +1,11 @@
 import { pool } from '../../db/pool.js';
-import { incomingSchema } from '../incoming/schema.js';
-import { saleSchema } from '../sales/schema.js';
+import { buildPayload, summaryOf, type Data } from './payload.js';
 import { keyboard, tg, type Button } from './telegram.js';
 
 /** Диалог менеджера с ботом: бот по очереди спрашивает те же поля, что и форма «Новая продажа», и
  * кладёт готовую заявку в sale_requests. Какое поле спрашивать следующим, определяет nextField():
  * так порядок вопросов сам подстраивается под уже введённые ответы (цемент/логистика, тип машины). */
 
-type Data = Record<string, string | number | null | undefined>;
 interface State {
   data: Data;
   /** Человекочитаемые подписи выбранных значений — для итогового сообщения и карточки заявки. */
@@ -18,8 +16,6 @@ interface State {
   promptId?: number;
 }
 
-const PACKAGING_LABELS: Record<string, string> = { MESHOK: 'Мешок', NAVAL: 'Навал' };
-const VEHICLE_LABELS: Record<string, string> = { CLIENT: 'Машина клиента', OWN: 'Своя машина', HIRED: 'Наёмная машина' };
 
 const FIELD_TITLES: Record<string, string> = {
   sale_type: 'Тип',
@@ -72,7 +68,6 @@ function parseNumber(text: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-const todayTashkent = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tashkent' });
 
 async function loadState(telegramId: number): Promise<State> {
   const { rows } = await pool.query('SELECT state FROM bot_sessions WHERE telegram_id = $1', [telegramId]);
@@ -176,33 +171,7 @@ async function ask(ctx: Ctx, telegramId: number, state: State) {
 }
 
 function summaryText(state: State): string {
-  const d = state.data;
-  const lines: string[] = [];
-  const add = (label: string, value: unknown) => {
-    if (value !== null && value !== undefined && value !== '') lines.push(`${label}: ${value}`);
-  };
-  const fmt = (v: unknown) => Number(v).toLocaleString('ru-RU');
-  add('Тип', d.sale_type === 'CEMENT' ? 'Цемент со склада' : d.sale_type === 'DIRECT' ? 'Напрямую от поставщика' : 'Логистика');
-  add('Клиент', state.names.client_id);
-  if (d.sale_type !== 'LOGISTICS') {
-    add('Поставщик', state.names.zavod_id);
-    add('Завод', state.names.factory_id);
-    add('Марка', state.names.cement_mark_id);
-    add('Упаковка', PACKAGING_LABELS[String(d.packaging)]);
-  }
-  add('Тоннаж', d.tonnage != null ? `${fmt(d.tonnage)} т` : null);
-  if (d.sale_type === 'CEMENT') add('Цена за тонну', d.price_per_ton != null ? `${fmt(d.price_per_ton)} сум` : null);
-  if (d.sale_type === 'DIRECT') {
-    add('Цена закупки', d.price_per_ton != null ? `${fmt(d.price_per_ton)} сум` : null);
-    add('Цена продажи', d.sale_price_per_ton != null ? `${fmt(d.sale_price_per_ton)} сум` : null);
-  }
-  add('Машина', VEHICLE_LABELS[String(d.vehicle_type)]);
-  add('Номер', d.vehicle_type === 'OWN' ? state.names.own_vehicle_id : d.machine_number);
-  add('Перевозчик', d.carrier_name);
-  add('Перевозка за тонну', d.freight_price_per_ton != null ? `${fmt(d.freight_price_per_ton)} сум` : null);
-  add('Найм за тонну', d.hire_price_per_ton != null ? `${fmt(d.hire_price_per_ton)} сум` : null);
-  add('Комментарий', d.comment);
-  return lines.join('\n');
+  return summaryOf(state.data, state.names);
 }
 
 async function showSummary(ctx: Ctx, telegramId: number, state: State) {
@@ -217,58 +186,13 @@ async function showSummary(ctx: Ctx, telegramId: number, state: State) {
 }
 
 async function submit(ctx: Ctx, telegramId: number, manager: { id: number; name: string }, state: State) {
-  const d = state.data;
-  const payload: Record<string, unknown> = {
-    date: todayTashkent(),
-    sale_type: d.sale_type,
-    client_id: d.client_id,
-    tonnage: d.tonnage,
-    vehicle_type: d.vehicle_type,
-    comment: d.comment || null,
-    own_vehicle_id: d.vehicle_type === 'OWN' ? d.own_vehicle_id : null,
-    machine_number: d.vehicle_type === 'OWN' ? (state.names.own_vehicle_id ?? null) : (d.machine_number ?? null),
-    carrier_name: d.vehicle_type === 'HIRED' ? d.carrier_name : null,
-    freight_price_per_ton: d.freight_price_per_ton ?? null,
-    hire_price_per_ton: d.vehicle_type === 'HIRED' ? d.hire_price_per_ton : null,
-    awaiting_shipment: true,
-  };
-  if (d.sale_type === 'CEMENT') {
-    Object.assign(payload, {
-      source: 'warehouse',
-      zavod_id: d.zavod_id,
-      factory_id: d.factory_id,
-      cement_mark_id: d.cement_mark_id,
-      packaging: d.packaging,
-      price_per_ton: d.price_per_ton,
-    });
-  }
-  let check: { success: true } | { success: false; error: { issues: { message: string }[] } };
-  if (d.sale_type === 'DIRECT') {
-    // Прямая продажа оформляется приходом «Напрямую»: к нему система сама привязывает продажу клиенту.
-    for (const k of ['source', 'date']) delete payload[k];
-    Object.assign(payload, {
-      date: todayTashkent(),
-      warehouse: 'DIRECT',
-      zavod_id: d.zavod_id,
-      factory_id: d.factory_id,
-      cement_mark_id: d.cement_mark_id,
-      packaging: d.packaging,
-      price_per_ton: d.price_per_ton,
-      sale_price_per_ton: d.sale_price_per_ton,
-      sale_machine_number: d.vehicle_type === 'OWN' ? null : (d.machine_number ?? null),
-      machine_number: null,
-    });
-    delete payload.sale_type;
-    delete payload.awaiting_shipment;
-    check = incomingSchema.safeParse(payload);
-  } else {
-    check = saleSchema.safeParse(payload);
-  }
-  if (!check.success) {
-    await ctx.say(`Заявка заполнена не полностью: ${check.error.issues[0]?.message ?? 'проверьте данные'}. Начните заново: /start`);
+  const built = buildPayload(state.data, state.names.own_vehicle_id ?? null);
+  if ('error' in built) {
+    await ctx.say(`Заявка заполнена не полностью: ${built.error}. Начните заново: /start`);
     await saveState(telegramId, null);
     return;
   }
+  const payload = built.payload;
   const { rows } = await pool.query(
     `INSERT INTO sale_requests (manager_id, manager_name, payload, summary) VALUES ($1, $2, $3, $4) RETURNING id`,
     [manager.id, manager.name, JSON.stringify({ ...payload, _names: state.names }), summaryText(state)],

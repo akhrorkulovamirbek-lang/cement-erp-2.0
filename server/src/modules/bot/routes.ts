@@ -11,6 +11,7 @@ import { saleSchema } from '../sales/schema.js';
 import { incomingSchema } from '../incoming/schema.js';
 import { createIncoming } from '../incoming/service.js';
 import { createSale } from '../sales/service.js';
+import { buildPayload, summaryOf, type Data } from './payload.js';
 import { notifyManager, tg } from './telegram.js';
 
 export const botRouter = Router();
@@ -32,6 +33,39 @@ botRouter.get(
       status ? [status] : [],
     );
     res.json(rows);
+  }),
+);
+
+// Заявка из мобильной формы «Быстрая заявка» (то же, что делает бот, только с экрана телефона).
+botRouter.post(
+  '/requests',
+  requirePermission('sales'),
+  asyncHandler(async (req, res) => {
+    const d = req.body as Data;
+    if (!['CEMENT', 'DIRECT', 'LOGISTICS'].includes(String(d.sale_type))) throw badRequest('Выберите тип заявки');
+    const names: Record<string, string> = {};
+    const lookup = async (field: string, table: string, col: string) => {
+      if (!d[field]) return;
+      const { rows } = await pool.query(`SELECT ${col} AS label FROM ${table} WHERE id = $1`, [Number(d[field])]);
+      if (rows[0]) names[field] = String(rows[0].label);
+    };
+    await Promise.all([
+      lookup('client_id', 'clients', 'name'),
+      lookup('zavod_id', 'zavody', 'name'),
+      lookup('factory_id', 'factories', 'name'),
+      lookup('cement_mark_id', 'cement_marks', 'name'),
+      lookup('own_vehicle_id', 'machines', 'number'),
+    ]);
+    const clean: Data = { ...d, machine_number: d.machine_number ? String(d.machine_number).replace(/\s+/g, '').toUpperCase() : null };
+    const built = buildPayload(clean, names.own_vehicle_id ?? null);
+    if ('error' in built) throw badRequest(built.error);
+    const who = req.user!.username;
+    const { rows: u } = await publicPool.query('SELECT full_name FROM users WHERE id = $1', [req.user!.userId]);
+    const { rows } = await pool.query(
+      `INSERT INTO sale_requests (manager_name, payload, summary) VALUES ($1, $2, $3) RETURNING id`,
+      [u[0]?.full_name || who, JSON.stringify({ ...built.payload, _names: names }), summaryOf(clean, names)],
+    );
+    res.status(201).json({ id: rows[0].id });
   }),
 );
 

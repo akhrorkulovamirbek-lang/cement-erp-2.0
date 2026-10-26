@@ -13,6 +13,7 @@ import { IncomingPage } from './pages/Incoming';
 import { Organizations } from './pages/Organizations';
 import { LogistDetail } from './pages/LogistDetail';
 import { Login } from './pages/Login';
+import { QuickOrder } from './pages/QuickOrder';
 import { Reports } from './pages/Reports';
 import { Sales } from './pages/Sales';
 import { Settings } from './pages/Settings';
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/incoming" element={<RequirePermission resource="incoming"><IncomingPage /></RequirePermission>} />
         <Route path="/sales" element={<RequirePermission resource="sales"><Sales /></RequirePermission>} />
         <Route path="/requests" element={<RequirePermission resource="sales"><BotRequests /></RequirePermission>} />
+        <Route path="/quick" element={<RequirePermission resource="sales"><QuickOrder /></RequirePermission>} />
         <Route path="/cash" element={<RequirePermission resource="cash"><Cash /></RequirePermission>} />
         <Route path="/cash-service" element={<RequirePermission resource="cashService"><CashService /></RequirePermission>} />
         <Route path="/reports" element={<RequirePermission resource="reports"><Reports /></RequirePermission>} />
