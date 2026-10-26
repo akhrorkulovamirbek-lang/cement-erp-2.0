@@ -14,6 +14,8 @@ interface State {
   names: Record<string, string>;
   /** Поле, ответ на которое бот сейчас ждёт. */
   awaiting?: string;
+  /** Последнее сообщение бота с вопросом — его убираем, когда менеджер ответил, чтобы не засорять чат. */
+  promptId?: number;
 }
 
 const PACKAGING_LABELS: Record<string, string> = { MESHOK: 'Мешок', NAVAL: 'Навал' };
@@ -92,6 +94,7 @@ async function saveState(telegramId: number, state: State | null) {
 interface Ctx {
   token: string;
   chatId: number;
+  lastId: number;
   say: (text: string, buttons?: Button[][]) => Promise<void>;
 }
 
@@ -271,7 +274,7 @@ async function submit(ctx: Ctx, telegramId: number, manager: { id: number; name:
     [manager.id, manager.name, JSON.stringify({ ...payload, _names: state.names }), summaryText(state)],
   );
   await saveState(telegramId, null);
-  await ctx.say(`Заявка №${rows[0].id} отправлена оператору. Когда её подтвердят, я напишу сюда.`, [
+  await ctx.say(`Заявка №${rows[0].id} отправлена оператору:\n\n${summaryText(state)}\n\nКогда её подтвердят, я напишу сюда.`, [
     [{ text: '➕ Ещё одна заявка', data: 'new' }],
   ]);
 }
@@ -308,8 +311,8 @@ async function searchClients(query: string) {
 }
 
 export interface IncomingUpdate {
-  message?: { chat: { id: number }; from?: { id: number }; text?: string };
-  callback_query?: { id: string; from: { id: number }; data?: string; message?: { chat: { id: number } } };
+  message?: { message_id?: number; chat: { id: number }; from?: { id: number }; text?: string };
+  callback_query?: { id: string; from: { id: number }; data?: string; message?: { message_id: number; text?: string; chat: { id: number } } };
 }
 
 export async function handleUpdate(token: string, update: IncomingUpdate): Promise<void> {
@@ -322,14 +325,49 @@ export async function handleUpdate(token: string, update: IncomingUpdate): Promi
   const ctx: Ctx = {
     token,
     chatId,
+    lastId: 0,
     say: async (text, buttons) => {
-      await tg(token, 'sendMessage', { chat_id: chatId, text, ...(buttons ? { reply_markup: keyboard(buttons) } : {}) });
+      const sent = await tg<{ message_id: number }>(token, 'sendMessage', { chat_id: chatId, text, ...(buttons ? { reply_markup: keyboard(buttons) } : {}) });
+      ctx.lastId = sent.message_id;
     },
   };
+  try {
+    await route(ctx, update, telegramId);
+  } finally {
+    // Запоминаем последний вопрос бота (если диалог идёт), чтобы убрать его после ответа.
+    if (ctx.lastId) {
+      await pool
+        .query(`UPDATE bot_sessions SET state = jsonb_set(state, '{promptId}', to_jsonb($2::bigint)) WHERE telegram_id = $1`, [telegramId, ctx.lastId])
+        .catch(() => undefined);
+    }
+  }
+}
+
+async function route(ctx: Ctx, update: IncomingUpdate, telegramId: number): Promise<void> {
+  const { token, chatId } = ctx;
+  const msg = update.message;
+  const cb = update.callback_query;
+  const del = (id?: number) =>
+    id ? tg(token, 'deleteMessage', { chat_id: chatId, message_id: id }).then(() => undefined, () => undefined) : Promise.resolve();
   if (cb) await tg(token, 'answerCallbackQuery', { callback_query_id: cb.id }).catch(() => undefined);
 
   const text = (msg?.text ?? '').trim();
   const data = cb?.data ?? '';
+
+  // Уборка чата: после ответа менеджера убираем его текст и вопрос бота; после нажатия кнопки — сам вопрос с кнопками.
+  const state = await loadState(telegramId);
+  if (msg) {
+    await del(msg.message_id);
+    await del(state.promptId);
+  }
+  if (cb?.message) {
+    const keepsText = !(data.startsWith('s:') || data === 'cancel' || data === 'go' || cb.message.text?.startsWith('Здравствуйте'));
+    if (keepsText) {
+      await tg(token, 'editMessageReplyMarkup', { chat_id: chatId, message_id: cb.message.message_id, reply_markup: { inline_keyboard: [] } }).catch(() => undefined);
+    } else {
+      await del(cb.message.message_id);
+    }
+  }
 
   const { rows: found } = await pool.query('SELECT id, name FROM bot_managers WHERE telegram_id = $1 AND active', [telegramId]);
   const manager = found[0] as { id: number; name: string } | undefined;
@@ -361,8 +399,6 @@ export async function handleUpdate(token: string, update: IncomingUpdate): Promi
     await ask(ctx, telegramId, { data: {}, names: {} });
     return;
   }
-
-  const state = await loadState(telegramId);
 
   if (data === 'go') {
     if (state.awaiting !== 'confirm') return menu(ctx, manager.name);
