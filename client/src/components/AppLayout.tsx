@@ -3,6 +3,7 @@ import {
   Building2,
   ChartBar,
   History,
+  Inbox,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -12,7 +13,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { useMyPermissions } from '@/api/modules';
+import { useMyPermissions, useSaleRequests } from '@/api/modules';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import {
@@ -49,12 +50,20 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/incoming', label: 'Приход', icon: Package, resource: 'incoming' },
   { to: '/sales', label: 'Продажи', icon: Wallet, resource: 'sales' },
   { to: '/cash', label: 'Касса', icon: Wallet, resource: 'cash' },
+  { to: '/requests', label: 'Заявки', icon: Inbox, resource: 'sales' },
   { to: '/cash-service', label: 'Обналичивание', icon: Banknote, resource: 'cashService' },
   { to: '/reports', label: 'Отчёты', icon: ChartBar, resource: 'reports' },
   { to: '/counterparties', label: 'Контрагенты', icon: UsersIcon, resource: 'references' },
   { to: '/audit-log', label: 'Журнал действий', icon: History, resource: 'auditLog' },
   { to: '/settings', label: 'Настройки', icon: SettingsIcon, resource: 'settings' },
 ];
+
+function PendingBadge() {
+  const pending = useSaleRequests('pending');
+  const n = pending.data?.length ?? 0;
+  if (n === 0) return null;
+  return <span className="ml-auto rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground">{n}</span>;
+}
 
 export function AppLayout() {
   const { username, fullName, role, logout, isPlatformAdmin, organizationName } = useAuth();
@@ -84,6 +93,7 @@ export function AppLayout() {
                         <NavLink to={item.to}>
                           <item.icon />
                           <span>{item.label}</span>
+                          {item.to === '/requests' && <PendingBadge />}
                         </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

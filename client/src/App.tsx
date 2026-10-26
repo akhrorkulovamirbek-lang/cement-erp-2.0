@@ -3,6 +3,7 @@ import { AppLayout } from '@/components/AppLayout';
 import { RequirePermission } from '@/components/RequirePermission';
 import { useAuth } from '@/context/AuthContext';
 import { AuditLog } from './pages/AuditLog';
+import { BotRequests } from './pages/BotRequests';
 import { Cash } from './pages/Cash';
 import { CashService } from './pages/CashService';
 import { ClientDetail } from './pages/ClientDetail';
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/organizations" element={<Organizations />} />
         <Route path="/incoming" element={<RequirePermission resource="incoming"><IncomingPage /></RequirePermission>} />
         <Route path="/sales" element={<RequirePermission resource="sales"><Sales /></RequirePermission>} />
+        <Route path="/requests" element={<RequirePermission resource="sales"><BotRequests /></RequirePermission>} />
         <Route path="/cash" element={<RequirePermission resource="cash"><Cash /></RequirePermission>} />
         <Route path="/cash-service" element={<RequirePermission resource="cashService"><CashService /></RequirePermission>} />
         <Route path="/reports" element={<RequirePermission resource="reports"><Reports /></RequirePermission>} />

@@ -7,6 +7,8 @@ import { authRouter } from './modules/auth/routes.js';
 import { adminRouter } from './modules/admin/routes.js';
 import { auditLogRouter } from './modules/auditLog/routes.js';
 import { bankAccountsRouter } from './modules/bankAccounts/routes.js';
+import { botRouter } from './modules/bot/routes.js';
+import { botWebhookRouter } from './modules/bot/webhook.js';
 import { brokerRouter } from './modules/broker/routes.js';
 import { cashExpenseRouter, cashIncomeRouter } from './modules/cash/routes.js';
 import { cashServiceRouter } from './modules/cashService/routes.js';
@@ -43,6 +45,8 @@ export function createApp() {
   app.use(cookieParser());
 
   app.use('/api/auth', authRouter);
+  // Телеграм присылает сюда сообщения менеджеров (без входа в систему; защищён секретом в адресе).
+  app.use('/api/bot/webhook', botWebhookRouter);
 
   app.use('/api', requireAuth);
 
@@ -108,6 +112,7 @@ export function createApp() {
     auditResource('client_adjustment', { table: 'client_debt_adjustments', label: 'Корректировка долга клиента' }),
     clientAdjustmentsRouter,
   );
+  app.use('/api/bot', requireAnyPermission('sales', 'settings'), botRouter);
   app.use('/api/vehicles', requireAnyPermission('sales', 'reports', 'references'), vehiclesRouter);
   app.use('/api/suggestions', requireAnyPermission('sales', 'cash', 'incoming'), suggestionsRouter);
   app.use('/api/report', requirePermission('reports'), reportsRouter);

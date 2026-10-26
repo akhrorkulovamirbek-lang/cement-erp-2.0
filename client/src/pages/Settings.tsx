@@ -25,6 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { formatMoney } from '@/lib/format';
 import { useToast } from '@/lib/toast';
+import { BotSettings } from './BotSettings';
 import { Users } from './Users';
 
 export function Settings() {
@@ -37,6 +38,7 @@ export function Settings() {
           <TabsTrigger value="permissions">Права ролей</TabsTrigger>
           <TabsTrigger value="users">Пользователи</TabsTrigger>
           <TabsTrigger value="general">Общие</TabsTrigger>
+          <TabsTrigger value="bot">Телеграм-бот</TabsTrigger>
           <TabsTrigger value="import">Импорт данных</TabsTrigger>
         </TabsList>
         <TabsContent value="modules" className="mt-4">
@@ -50,6 +52,9 @@ export function Settings() {
         </TabsContent>
         <TabsContent value="general" className="mt-4">
           <GeneralTab />
+        </TabsContent>
+        <TabsContent value="bot" className="mt-4">
+          <BotSettings />
         </TabsContent>
         <TabsContent value="import" className="mt-4">
           <ImportTab />

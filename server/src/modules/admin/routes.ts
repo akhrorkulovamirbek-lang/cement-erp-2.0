@@ -10,6 +10,7 @@ export const adminRouter = Router();
 // Всё, что вводилось в работе: справочники, документы, касса, остатки. НЕ трогаем users, permissions,
 // module_settings, app_settings и audit_log (журнал действий неизменяем по ТЗ).
 const DATA_TABLES = [
+  'sale_requests',
   'client_debt_adjustments',
   'cash_service_operations',
   'cash_income',

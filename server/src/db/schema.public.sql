@@ -37,3 +37,8 @@ CREATE TABLE IF NOT EXISTS organizations (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id);
 -- Владелец платформы: создаёт организации, видит только раздел «Организации», данных организаций не видит.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_platform_admin BOOLEAN NOT NULL DEFAULT false;
+
+-- Телеграм-бот приёма заявок на продажу: у каждой организации свой бот.
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS bot_token TEXT;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS bot_secret TEXT;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS bot_username TEXT;

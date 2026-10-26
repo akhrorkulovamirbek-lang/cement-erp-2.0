@@ -480,3 +480,33 @@ ALTER TABLE incoming ADD COLUMN IF NOT EXISTS factory_id INTEGER REFERENCES fact
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS factory_id INTEGER REFERENCES factories(id);
 -- В продаже завод — отметка (с какого завода цемент); остатки склада по-прежнему по поставщику.
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS factory_id INTEGER REFERENCES factories(id);
+
+-- Телеграм-бот: менеджеры, которым разрешено присылать заявки, их диалоги и сами заявки.
+CREATE TABLE IF NOT EXISTS bot_managers (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  link_code TEXT UNIQUE,
+  telegram_id BIGINT UNIQUE,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS bot_sessions (
+  telegram_id BIGINT PRIMARY KEY,
+  state JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS sale_requests (
+  id SERIAL PRIMARY KEY,
+  manager_id INTEGER REFERENCES bot_managers(id) ON DELETE SET NULL,
+  manager_name TEXT NOT NULL DEFAULT '',
+  payload JSONB NOT NULL,
+  summary TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  reject_reason TEXT,
+  sale_id INTEGER,
+  decided_by INTEGER,
+  decided_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

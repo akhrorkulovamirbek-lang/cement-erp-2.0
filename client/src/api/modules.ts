@@ -487,3 +487,79 @@ export function useLogistAction() {
     removeAdjustment: useMutation({ mutationFn: (adjId: number) => api.delete(`/logists/adjustments/${adjId}`), onSuccess: done }),
   };
 }
+
+// ---- Телеграм-бот: заявки на продажу от менеджеров ----
+export interface SaleRequest {
+  id: number;
+  manager_name: string;
+  summary: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reject_reason: string | null;
+  sale_id: number | null;
+  created_at: string;
+  decided_at: string | null;
+}
+export interface BotManager {
+  id: number;
+  name: string;
+  link_code: string | null;
+  linked: boolean;
+  active: boolean;
+}
+
+export function useSaleRequests(status?: string, options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: ['bot-requests', status ?? 'all'],
+    queryFn: () => api.get<SaleRequest[]>(`/bot/requests${buildQuery({ status })}`),
+    refetchInterval: 30_000,
+    enabled: options.enabled ?? true,
+  });
+}
+
+export function useDecideRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { id: number; approve: boolean; reason?: string }) =>
+      api.post<unknown>(`/bot/requests/${p.id}/${p.approve ? 'approve' : 'reject'}`, p.approve ? {} : { reason: p.reason ?? '' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bot-requests'] });
+      qc.invalidateQueries({ queryKey: ['sales'] });
+      for (const k of REPORT_KEYS) qc.invalidateQueries({ queryKey: [k] });
+    },
+  });
+}
+
+export function useBotConfig() {
+  return useQuery({ queryKey: ['bot-config'], queryFn: () => api.get<{ connected: boolean; username: string | null }>('/bot/config') });
+}
+export function useSaveBotToken() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (token: string) => api.put<{ connected: boolean; username: string }>('/bot/config', { token }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bot-config'] }),
+  });
+}
+export function useRemoveBot() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete<void>('/bot/config'),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bot-config'] }),
+  });
+}
+export function useBotManagers() {
+  return useQuery({ queryKey: ['bot-managers'], queryFn: () => api.get<BotManager[]>('/bot/managers') });
+}
+export function useAddBotManager() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api.post<{ id: number; name: string; link_code: string }>('/bot/managers', { name }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bot-managers'] }),
+  });
+}
+export function useDeleteBotManager() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.delete<void>(`/bot/managers/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bot-managers'] }),
+  });
+}
