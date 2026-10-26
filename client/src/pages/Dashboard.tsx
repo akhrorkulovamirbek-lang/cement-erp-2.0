@@ -145,7 +145,7 @@ export function Dashboard() {
         <DebtCard
           title="Должны мы перевозчикам"
           total={debts.data?.carrierDebtTotal ?? 0}
-          items={(debts.data?.topCarriers ?? []).map((c) => ({ key: c.name, label: c.name, value: c.balance }))}
+          items={(debts.data?.topCarriers ?? []).map((c) => ({ key: c.name, label: c.name, value: c.balance, href: c.logist_id ? `/logists/${c.logist_id}` : undefined }))}
         />
       </div>
 
@@ -168,7 +168,7 @@ export function Dashboard() {
                 title="Должны нам перевозчики"
                 tone="owedToUs"
                 total={debts.data?.carrierOverpaidTotal ?? 0}
-                items={(debts.data?.topCarriersOverpaid ?? []).map((c) => ({ key: c.name, label: c.name, value: c.balance }))}
+                items={(debts.data?.topCarriersOverpaid ?? []).map((c) => ({ key: c.name, label: c.name, value: c.balance, href: c.logist_id ? `/logists/${c.logist_id}` : undefined }))}
               />
             )}
             {(debts.data?.clientOverpaidTotal ?? 0) > 0 && (

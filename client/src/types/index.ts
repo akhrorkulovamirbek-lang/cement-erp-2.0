@@ -345,14 +345,14 @@ export interface DebtsSummary {
   carrierDebtTotal: number;
   topClients: { id: number; name: string; balance: string }[];
   topZavody: { id: number; name: string; balance: string }[];
-  topCarriers: { name: string; balance: string }[];
+  topCarriers: { name: string; logist_id: number | null; balance: string }[];
   // Переплаты: клиент заплатил вперёд (мы должны ему); завод/перевозчик получил больше начисленного (должен нам).
   clientOverpaidTotal: number;
   zavodOverpaidTotal: number;
   carrierOverpaidTotal: number;
   topClientsOverpaid: { id: number; name: string; balance: string }[];
   topZavodyOverpaid: { id: number; name: string; balance: string }[];
-  topCarriersOverpaid: { name: string; balance: string }[];
+  topCarriersOverpaid: { name: string; logist_id: number | null; balance: string }[];
 }
 
 export interface CashRegister {

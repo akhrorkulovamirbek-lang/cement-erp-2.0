@@ -10,12 +10,20 @@ export const salesRouter = Router();
 salesRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const { client_id, cement_mark_id, from, to, source, sale_type, deferred, awaiting, q } = req.query;
+    const { client_id, cement_mark_id, from, to, source, sale_type, deferred, awaiting, q, factory_id, zavod_id } = req.query;
     const conditions: string[] = [];
     const params: unknown[] = [];
     if (client_id) {
       params.push(Number(client_id));
       conditions.push(`s.client_id = $${params.length}`);
+    }
+    if (factory_id) {
+      params.push(Number(factory_id));
+      conditions.push(`s.factory_id = $${params.length}`);
+    }
+    if (zavod_id) {
+      params.push(Number(zavod_id));
+      conditions.push(`s.zavod_id = $${params.length}`);
     }
     if (cement_mark_id) {
       params.push(Number(cement_mark_id));

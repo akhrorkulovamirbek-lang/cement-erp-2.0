@@ -173,7 +173,7 @@ reportsRouter.get(
          WHERE z.initial_debt + COALESCE(i.total, 0) - COALESCE(p.total, 0) <> 0
          ORDER BY balance DESC`,
       ),
-      pool.query(`SELECT name, balance FROM (${CARRIER_BALANCES_SQL}) c WHERE balance <> 0 ORDER BY balance DESC`),
+      pool.query(`SELECT name, logist_id, balance FROM (${CARRIER_BALANCES_SQL}) c WHERE balance <> 0 ORDER BY balance DESC`),
     ]);
 
     // Баланс > 0 — должны нам (клиент) / мы должны (завод, перевозчик); < 0 — переплата в обратную

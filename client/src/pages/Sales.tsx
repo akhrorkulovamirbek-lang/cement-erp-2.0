@@ -86,6 +86,8 @@ export function Sales() {
   const [to, setTo] = useState('');
   const [clientFilter, setClientFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [factoryFilter, setFactoryFilter] = useState('');
+  const [zavodFilter, setZavodFilter] = useState('');
   const [searchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') ?? '');
   const [q, setQ] = useState('');
@@ -94,6 +96,8 @@ export function Sales() {
     to: to || undefined,
     client_id: clientFilter || undefined,
     sale_type: typeFilter || undefined,
+    factory_id: factoryFilter || undefined,
+    zavod_id: zavodFilter || undefined,
     deferred: statusFilter === 'deferred' ? '1' : undefined,
     awaiting: statusFilter === 'awaiting' ? '1' : undefined,
     q: q || undefined,
@@ -375,6 +379,20 @@ export function Sales() {
           className="w-full sm:w-48"
           placeholder="Все клиенты"
           options={[{ value: '', label: 'Все клиенты' }, ...(clients.data ?? []).map((c) => ({ value: String(c.id), label: c.name }))]}
+        />
+        <PlainSelect
+          value={factoryFilter}
+          onValueChange={setFactoryFilter}
+          className="w-full sm:w-44"
+          placeholder="Все заводы"
+          options={[{ value: '', label: 'Все заводы' }, ...(factories.data ?? []).map((f) => ({ value: String(f.id), label: f.name }))]}
+        />
+        <PlainSelect
+          value={zavodFilter}
+          onValueChange={setZavodFilter}
+          className="w-full sm:w-48"
+          placeholder="Все поставщики"
+          options={[{ value: '', label: 'Все поставщики' }, ...(zavody.data ?? []).map((z) => ({ value: String(z.id), label: z.name }))]}
         />
         <PlainSelect
           value={typeFilter}
