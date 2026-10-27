@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { notifyGoodsPayment, notifySale } from '../bot/clientNotify.js';
 import { pool, withTransaction } from '../../db/pool.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { incomingSchema } from './schema.js';
@@ -57,6 +58,9 @@ incomingRouter.post(
   asyncHandler(async (req, res) => {
     const data = incomingSchema.parse(req.body);
     const row = await withTransaction((client) => createIncoming(client, data));
+    // Прямая продажа создаёт продажу клиенту; оплата цементом — оплату от клиента.
+    notifySale(row.linked_sale_id);
+    notifyGoodsPayment(row.id);
     res.status(201).json(row);
   }),
 );

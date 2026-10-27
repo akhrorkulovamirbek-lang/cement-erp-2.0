@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { notifyPaidToClient, notifyPayment } from '../bot/clientNotify.js';
 import { pool } from '../../db/pool.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { CARRIER_BALANCES_SQL } from '../../lib/carrierBalances.js';
@@ -106,6 +107,7 @@ cashIncomeRouter.post(
         data.extra_amount ?? null,
       ],
     );
+    notifyPayment(rows[0].id);
     res.status(201).json(rows[0]);
   }),
 );
@@ -223,6 +225,7 @@ cashExpenseRouter.post(
         data.category === 'контрагент' ? (data.client_id ?? null) : null,
       ],
     );
+    notifyPaidToClient(rows[0].id);
     res.status(201).json(rows[0]);
   }),
 );

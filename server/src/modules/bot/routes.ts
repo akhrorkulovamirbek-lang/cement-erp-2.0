@@ -12,6 +12,7 @@ import { incomingSchema } from '../incoming/schema.js';
 import { createIncoming } from '../incoming/service.js';
 import { createSale } from '../sales/service.js';
 import { buildPayload, summaryOf, type Data } from './payload.js';
+import { notifySale } from './clientNotify.js';
 import { notifyManager, tg } from './telegram.js';
 
 export const botRouter = Router();
@@ -104,6 +105,7 @@ botRouter.post(
       objectLabel: `Продажа из заявки бота №${id}`,
       req,
     });
+    notifySale(result.sale.id);
     const { rows: m } = await pool.query('SELECT telegram_id FROM bot_managers WHERE id = $1', [result.request.manager_id]);
     await notifyManager(orgIdOf(req), m[0]?.telegram_id ?? null, `✅ Заявка №${id} подтверждена. Продажа ждёт погрузки.`);
     res.json({ ok: true, sale_id: result.sale.id });

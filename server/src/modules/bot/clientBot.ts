@@ -14,7 +14,7 @@ export interface ClientLink {
 }
 
 
-const fmt = (v: unknown) => Math.round(Number(v)).toLocaleString('ru-RU');
+export const fmt = (v: unknown) => Math.round(Number(v)).toLocaleString('ru-RU');
 
 function todayTashkent(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Tashkent' });
@@ -41,7 +41,7 @@ function periodRange(period: string): { from: string | null; to: string | null; 
   return { from: null, to: null, label: 'за всё время' };
 }
 
-async function balanceOf(clientId: number) {
+export async function balanceOf(clientId: number) {
   const { rows } = await pool.query(
     `SELECT c.initial_debt + COALESCE(st.total, 0) + COALESCE(ap.total, 0) AS purchased,
             COALESCE(pt.total, 0) AS paid,
@@ -56,7 +56,7 @@ async function balanceOf(clientId: number) {
   return rows[0] as { purchased: string; paid: string; balance: string };
 }
 
-function balanceLine(balance: number): string {
+export function balanceLine(balance: number): string {
   if (Math.abs(balance) < 1) return '✅ Задолженности нет.';
   return balance > 0 ? `Ваш долг: ${fmt(balance)} сум` : `Переплата: ${fmt(-balance)} сум (мы должны вам)`;
 }

@@ -4,6 +4,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { notFound } from '../../lib/errors.js';
 import { saleSchema } from './schema.js';
 import { createSale, deleteSale, updateSale } from './service.js';
+import { notifySale } from '../bot/clientNotify.js';
 
 export const salesRouter = Router();
 
@@ -79,6 +80,7 @@ salesRouter.post(
   asyncHandler(async (req, res) => {
     const data = saleSchema.parse(req.body);
     const row = await withTransaction((client) => createSale(client, data));
+    notifySale(row.id);
     res.status(201).json(row);
   }),
 );
