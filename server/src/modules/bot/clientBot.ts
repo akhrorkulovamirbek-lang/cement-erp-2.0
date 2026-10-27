@@ -1,6 +1,7 @@
 import { pool } from '../../db/pool.js';
 import { CLIENT_ADJ_PLUS_SUBQUERY, CLIENT_PAID_SUBQUERY, UZS_SALE } from '../reports/routes.js';
-import { keyboard, tg, type Button } from './telegram.js';
+import { buildClientWorkbook } from './clientReport.js';
+import { keyboard, sendDocument, tg, type Button } from './telegram.js';
 
 /** Бот для клиентов: баланс, покупки и платежи за выбранный период. Клиент видит только свои данные —
  * client_id берётся из привязки в базе, а не из того, что он пишет боту. Закупочные цены, поставщиков
@@ -193,6 +194,7 @@ export async function handleClientUpdate(token: string, chatId: number, link: Cl
         { text: '💵 Платежи', data: 'c:pay' },
       ],
       [{ text: '📊 Сверка за период', data: 'c:rec' }],
+      [{ text: '📎 Выписка в Excel', data: 'c:xls' }],
     ]);
 
   if (!data.startsWith('c:')) {
@@ -208,12 +210,26 @@ export async function handleClientUpdate(token: string, chatId: number, link: Cl
     return;
   }
   if (!period) {
-    await say(`За какой период показать ${kind === 'buy' ? 'покупки' : kind === 'pay' ? 'платежи' : 'сверку'}?`, periodButtons(kind));
+    await say(`За какой период ${kind === 'xls' ? 'сформировать выписку' : `показать ${kind === 'buy' ? 'покупки' : kind === 'pay' ? 'платежи' : 'сверку'}`}?`, periodButtons(kind));
     return;
   }
   if (kind === 'buy' || kind === 'pay') {
     const rep = kind === 'buy' ? await purchasesReport(link.client_id, period) : await paymentsReport(link.client_id, period);
     for (let i = 0; i < rep.messages.length; i++) await say(rep.messages[i], i === rep.messages.length - 1 ? [BACK] : undefined);
+    return;
+  }
+  if (kind === 'xls') {
+    const range = periodRange(period);
+    await say('Формирую выписку…');
+    try {
+      const file = await buildClientWorkbook(link.client_id, link.name, range);
+      const safe = link.name.replace(/[^\p{L}\p{N}]+/gu, '_');
+      await sendDocument(token, chatId, `Выписка_${safe}_${PERIOD_LABELS[period] ?? 'период'}.xlsx`.replace(/\s+/g, '_'), file, `Выписка ${range.label}`);
+      await say('Готово. Файл выше.', [BACK]);
+    } catch (err) {
+      console.error('client xls:', err instanceof Error ? err.message : err);
+      await say('Не удалось сформировать выписку. Попробуйте позже.', [BACK]);
+    }
     return;
   }
   if (kind === 'rec') {

@@ -38,3 +38,14 @@ export async function notifyManager(orgId: number, telegramId: number | string |
     console.error('bot notify:', err instanceof Error ? err.message : err);
   }
 }
+
+/** Отправка файла в чат (multipart): Телеграм принимает документ до 50 МБ. */
+export async function sendDocument(token: string, chatId: number, filename: string, data: Buffer, caption?: string): Promise<void> {
+  const form = new FormData();
+  form.append('chat_id', String(chatId));
+  if (caption) form.append('caption', caption);
+  form.append('document', new Blob([new Uint8Array(data)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
+  const res = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, { method: 'POST', body: form });
+  const json = (await res.json()) as { ok: boolean; description?: string };
+  if (!json.ok) throw new Error(json.description || 'Не удалось отправить файл');
+}
