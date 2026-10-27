@@ -626,3 +626,66 @@ export function useRunSurvey() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sales'] }),
   });
 }
+
+// ---- Финансовые отчёты ----
+export interface PnlData {
+  cement: { source: string; deals: number; tonnage: number; revenue: number; cost: number; margin: number }[];
+  logistics: {
+    own: { trips: number; tonnage: number; revenue: number; cost: number };
+    hired: { trips: number; tonnage: number; revenue: number; cost: number };
+  };
+  other: { cashServiceCommission: number; otherExpenses: number };
+  excludedHistorical: number;
+}
+export interface DealMargin {
+  id: number;
+  date: string;
+  client_id: number;
+  client_name: string;
+  mark: string | null;
+  packaging: string | null;
+  source: string;
+  tonnage: string;
+  price_per_ton: string;
+  cost_per_ton: string;
+  revenue: string;
+  cost: string;
+  margin: string;
+}
+export interface CashFlowData {
+  opening: { UZS: number; USD: number };
+  income: { category: string; UZS: number; USD: number }[];
+  expense: { category: string; UZS: number; USD: number }[];
+  closing: { UZS: number; USD: number };
+}
+export interface BrokerReportData {
+  opening: number;
+  replenish: number;
+  purchases: number;
+  returns: number;
+  closing: number;
+  currentBalance: number;
+  rows: { id: number; date: string; type: 'replenish' | 'ticket_purchase' | 'ticket_return'; amount: number; description: string | null; ticket_number: string | null; balance: number }[];
+}
+export interface StockReportData {
+  warehouse: { zavod_name: string; mark: string; packaging: string; tonnage: number; avg_cost_per_ton: number; value: number }[];
+  tickets: { ticket_number: string; date: string; zavod_name: string; mark: string; packaging: string; tonnage: number; price_per_ton: number; value: number }[];
+}
+export interface MachineRow {
+  label: string;
+  type: 'own' | 'hired';
+  trips: number;
+  tonnage: number;
+  revenue: number;
+  cost: number;
+  costs: { type: string; amount: number }[];
+  profit: number;
+}
+
+type Period = { from?: string; to?: string };
+export const usePnl = (p: Period) => useQuery({ queryKey: ['fin-pnl', p], queryFn: () => api.get<PnlData>(`/report/pnl${buildQuery(p)}`) });
+export const useDealMargins = (p: Period) => useQuery({ queryKey: ['fin-deals', p], queryFn: () => api.get<DealMargin[]>(`/report/deal-margins${buildQuery(p)}`) });
+export const useCashFlow = (p: Period) => useQuery({ queryKey: ['fin-cashflow', p], queryFn: () => api.get<CashFlowData>(`/report/cash-flow${buildQuery(p)}`) });
+export const useBrokerReport = (p: Period) => useQuery({ queryKey: ['fin-broker', p], queryFn: () => api.get<BrokerReportData>(`/report/broker${buildQuery(p)}`) });
+export const useStockReport = () => useQuery({ queryKey: ['fin-stock'], queryFn: () => api.get<StockReportData>('/report/stock') });
+export const useMachinesReport = (p: Period) => useQuery({ queryKey: ['fin-machines', p], queryFn: () => api.get<MachineRow[]>(`/report/machines${buildQuery(p)}`) });

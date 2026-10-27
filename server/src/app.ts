@@ -21,6 +21,7 @@ import { importRouter } from './modules/import/routes.js';
 import { incomingRouter } from './modules/incoming/routes.js';
 import { logistsRouter } from './modules/logists/routes.js';
 import { machinesRouter } from './modules/machines/routes.js';
+import { financialRouter } from './modules/reports/financial.js';
 import { reportsRouter } from './modules/reports/routes.js';
 import { salesRouter } from './modules/sales/routes.js';
 import { myAccessRouter } from './modules/settings/publicRoutes.js';
@@ -115,7 +116,7 @@ export function createApp() {
   app.use('/api/bot', requireAnyPermission('sales', 'settings'), botRouter);
   app.use('/api/vehicles', requireAnyPermission('sales', 'reports', 'references'), vehiclesRouter);
   app.use('/api/suggestions', requireAnyPermission('sales', 'cash', 'incoming'), suggestionsRouter);
-  app.use('/api/report', requirePermission('reports'), reportsRouter);
+  app.use('/api/report', requirePermission('reports'), financialRouter, reportsRouter);
 
   // Ядро
   app.use('/api/users', requirePermission('users'), usersRouter);

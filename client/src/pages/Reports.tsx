@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BrokerTab, CashFlowTab, DealMarginsTab, MachinesTab, PnlTab, StockTab } from './ReportsFinancial';
 import { Link } from 'react-router-dom';
 import {
   useCashServiceSummary,
@@ -27,8 +28,14 @@ export function Reports() {
   return (
     <div>
       <PageHeader title="Отчёты" subtitle="Цемент, логистика, клиенты, поставщики и обналичивание — в одном месте" />
-      <Tabs defaultValue="cement">
-        <TabsList className="flex-wrap">
+      <Tabs defaultValue="pnl">
+        <TabsList className="h-auto w-full flex-wrap justify-start">
+          <TabsTrigger value="pnl">Прибыли и убытки</TabsTrigger>
+          <TabsTrigger value="deals">Маржа по сделкам</TabsTrigger>
+          <TabsTrigger value="cashflow">Движение денег</TabsTrigger>
+          <TabsTrigger value="broker">Брокерский счёт</TabsTrigger>
+          <TabsTrigger value="stock">Остатки</TabsTrigger>
+          <TabsTrigger value="machines">Машины и рейсы</TabsTrigger>
           <TabsTrigger value="cement">Цемент</TabsTrigger>
           <TabsTrigger value="vehicles">Логистика</TabsTrigger>
           <TabsTrigger value="clients">Клиенты</TabsTrigger>
@@ -37,6 +44,24 @@ export function Reports() {
           <TabsTrigger value="cash-service">Обналичивание</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="pnl" className="mt-4">
+          <PnlTab />
+        </TabsContent>
+        <TabsContent value="deals" className="mt-4">
+          <DealMarginsTab />
+        </TabsContent>
+        <TabsContent value="cashflow" className="mt-4">
+          <CashFlowTab />
+        </TabsContent>
+        <TabsContent value="broker" className="mt-4">
+          <BrokerTab />
+        </TabsContent>
+        <TabsContent value="stock" className="mt-4">
+          <StockTab />
+        </TabsContent>
+        <TabsContent value="machines" className="mt-4">
+          <MachinesTab />
+        </TabsContent>
         <TabsContent value="cement" className="mt-4">
           <CementTab />
         </TabsContent>
