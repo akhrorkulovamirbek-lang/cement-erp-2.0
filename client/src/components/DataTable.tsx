@@ -58,7 +58,7 @@ export function DataTable<T>({
   // Фильтры по колонкам как в Excel: для колонки хранится набор РАЗРЕШЁННЫХ значений.
   const [colFilters, setColFilters] = useState<Record<string, Set<string>>>({});
   // Скрытые колонки запоминаются в браузере отдельно для каждой таблицы (ключ — набор её колонок).
-  const storageKey = `dt.hidden.${columns.map((c) => c.key).join(',')}`;
+  const storageKey = `dt.hidden.${columns.map((c) => c.key).sort().join(',')}`;
   const [hidden, setHiddenState] = useState<Set<string>>(() => {
     try {
       return new Set<string>(JSON.parse(localStorage.getItem(storageKey) ?? '[]'));

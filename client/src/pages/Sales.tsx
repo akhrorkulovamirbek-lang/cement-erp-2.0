@@ -331,6 +331,26 @@ export function Sales() {
       header: 'Клиент',
       render: (r) => (r.client_name ? r.client_name : <Badge tone="amber">Отложена — клиент не указан</Badge>),
     },
+    {
+      key: 'vehicle_type',
+      header: 'Машина',
+      render: (r) => {
+        const plate = r.machine_number ?? r.own_vehicle_number;
+        return (
+          <>
+            {VEHICLE_TYPE_LABELS[r.vehicle_type]}
+            {plate && (
+              <>
+                {' · '}
+                <Link to={`/vehicles/${encodeURIComponent(plate)}`} className="text-primary hover:underline">
+                  {plate}
+                </Link>
+              </>
+            )}
+          </>
+        );
+      },
+    },
     { key: 'factory_name', header: 'Завод', render: (r) => r.factory_name ?? '—' },
     { key: 'cement_mark_name', header: 'Марка', render: (r) => r.cement_mark_name ?? '—' },
     {
@@ -362,26 +382,6 @@ export function Sales() {
         if (r.source === 'ticket') return <Badge tone="blue">{r.ticket_number}</Badge>;
         if (r.source === 'direct') return <Badge tone="amber">Напрямую</Badge>;
         return <Badge tone="slate">Склад</Badge>;
-      },
-    },
-    {
-      key: 'vehicle_type',
-      header: 'Машина',
-      render: (r) => {
-        const plate = r.machine_number ?? r.own_vehicle_number;
-        return (
-          <>
-            {VEHICLE_TYPE_LABELS[r.vehicle_type]}
-            {plate && (
-              <>
-                {' · '}
-                <Link to={`/vehicles/${encodeURIComponent(plate)}`} className="text-primary hover:underline">
-                  {plate}
-                </Link>
-              </>
-            )}
-          </>
-        );
       },
     },
   ];
