@@ -67,8 +67,8 @@ function Field({ label, invalid, children, hint }: { label: string; invalid?: bo
 }
 
 /** Короткий список — крупные кнопки (одно нажатие), длинный — выпадающий список с поиском. */
-function Pick({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: Opt[]; placeholder: string }) {
-  if (options.length > 6) {
+function Pick({ value, onChange, options, placeholder, maxChips = 6 }: { value: string; onChange: (v: string) => void; options: Opt[]; placeholder: string; maxChips?: number }) {
+  if (options.length > maxChips) {
     return <PlainSelect value={value} onValueChange={onChange} options={options} placeholder={placeholder} className="h-12 w-full text-base" />;
   }
   if (options.length === 0) return <p className="text-sm text-muted-foreground">Список пуст — добавьте в «Контрагентах»</p>;
@@ -314,7 +314,7 @@ export function QuickOrder() {
             <Pick value={f.factory_id ?? ''} onChange={set('factory_id')} options={opts(factories.data)} placeholder="Выберите завод" />
           </Field>
           <Field label="Марка" invalid={errors.has('cement_mark_id')}>
-            <Pick value={f.cement_mark_id ?? ''} onChange={set('cement_mark_id')} options={opts(marks.data)} placeholder="Выберите марку" />
+            <Pick value={f.cement_mark_id ?? ''} onChange={set('cement_mark_id')} options={opts(marks.data)} placeholder="Выберите марку" maxChips={30} />
           </Field>
           <Field label="Упаковка" invalid={errors.has('packaging')}>
             <ButtonGroup value={f.packaging ?? ''} onChange={set('packaging')} options={PACKAGING_OPTIONS} className={wide} />
