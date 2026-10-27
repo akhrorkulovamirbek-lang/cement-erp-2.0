@@ -299,6 +299,21 @@ export function Sales() {
       render: (r) => (r.awaiting_shipment ? <Badge tone="amber">Ждёт отгрузки</Badge> : ''),
     },
     {
+      key: 'delivery_status',
+      header: 'Доставка',
+      sortValue: (r) => (r.delivery_status === 'yes' ? 'Подтверждена клиентом' : r.delivery_status === 'no' ? 'Клиент: не доставлено' : r.delivery_status === 'asked' ? 'Ждём ответ клиента' : '—'),
+      render: (r) =>
+        r.delivery_status === 'yes' ? (
+          <Badge tone="green">Подтверждена клиентом</Badge>
+        ) : r.delivery_status === 'no' ? (
+          <Badge tone="red">Клиент: не доставлено</Badge>
+        ) : r.delivery_status === 'asked' ? (
+          <Badge tone="slate">Ждём ответ клиента</Badge>
+        ) : (
+          '—'
+        ),
+    },
+    {
       key: 'client_name',
       header: 'Клиент',
       render: (r) => (r.client_name ? r.client_name : <Badge tone="amber">Отложена — клиент не указан</Badge>),

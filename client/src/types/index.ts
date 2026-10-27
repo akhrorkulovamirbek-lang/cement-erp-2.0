@@ -237,6 +237,7 @@ export interface Sale {
   client_name: string | null;
   is_deferred: boolean;
   awaiting_shipment: boolean;
+  delivery_status: 'asked' | 'yes' | 'no' | null;
   factory_id: number | null;
   factory_name: string | null;
   source: 'warehouse' | 'ticket' | 'direct' | null;

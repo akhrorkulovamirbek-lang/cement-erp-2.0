@@ -286,7 +286,7 @@ async function route(ctx: Ctx, update: IncomingUpdate, telegramId: number): Prom
     await del(state.promptId);
   }
   if (cb?.message) {
-    const keepsText = !(data.startsWith('s:') || data === 'cancel' || data === 'go' || cb.message.text?.startsWith('Здравствуйте') || cb.message.text?.startsWith('За какой период'));
+    const keepsText = !(data.startsWith('s:') || data.startsWith('d:') || data === 'cancel' || data === 'go' || cb.message.text?.startsWith('Здравствуйте') || cb.message.text?.startsWith('За какой период'));
     if (keepsText) {
       await tg(token, 'editMessageReplyMarkup', { chat_id: chatId, message_id: cb.message.message_id, reply_markup: { inline_keyboard: [] } }).catch(() => undefined);
     } else {

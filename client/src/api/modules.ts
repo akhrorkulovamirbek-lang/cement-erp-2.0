@@ -595,3 +595,26 @@ export function useDisconnectBotClient() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['bot-client-links'] }),
   });
 }
+
+export interface SurveySettings {
+  enabled: boolean;
+  hour: number;
+  lastRun: string | null;
+}
+export function useSurveySettings() {
+  return useQuery({ queryKey: ['bot-survey'], queryFn: () => api.get<SurveySettings>('/bot/survey') });
+}
+export function useUpdateSurvey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { enabled?: boolean; hour?: number }) => api.put<SurveySettings>('/bot/survey', data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bot-survey'] }),
+  });
+}
+export function useRunSurvey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<{ asked: number }>('/bot/survey/run'),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sales'] }),
+  });
+}

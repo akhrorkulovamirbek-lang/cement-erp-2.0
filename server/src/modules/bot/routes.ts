@@ -13,6 +13,7 @@ import { createIncoming } from '../incoming/service.js';
 import { createSale } from '../sales/service.js';
 import { buildPayload, summaryOf, type Data } from './payload.js';
 import { notifySale } from './clientNotify.js';
+import { getSurveySettings, runDeliverySurvey, setSurveySetting } from './survey.js';
 import { notifyManager, tg } from './telegram.js';
 
 export const botRouter = Router();
@@ -241,5 +242,36 @@ botRouter.delete(
   asyncHandler(async (req, res) => {
     await pool.query('DELETE FROM bot_client_links WHERE client_id = $1', [Number(req.params.clientId)]);
     res.status(204).end();
+  }),
+);
+
+// ---- Вечерний опрос клиентов о доставке ----
+
+botRouter.get(
+  '/survey',
+  requirePermission('settings'),
+  asyncHandler(async (_req, res) => {
+    res.json(await getSurveySettings());
+  }),
+);
+
+botRouter.put(
+  '/survey',
+  requirePermission('settings'),
+  asyncHandler(async (req, res) => {
+    const body = z.object({ enabled: z.boolean().optional(), hour: z.coerce.number().int().min(0).max(23).optional() }).parse(req.body);
+    if (body.enabled !== undefined) await setSurveySetting('survey_enabled', String(body.enabled));
+    if (body.hour !== undefined) await setSurveySetting('survey_hour', String(body.hour));
+    res.json(await getSurveySettings());
+  }),
+);
+
+// Запустить опрос прямо сейчас (например, чтобы проверить): спрашивает про все ещё не опрошенные заказы.
+botRouter.post(
+  '/survey/run',
+  requirePermission('settings'),
+  asyncHandler(async (req, res) => {
+    const asked = await runDeliverySurvey(orgIdOf(req));
+    res.json({ asked });
   }),
 );

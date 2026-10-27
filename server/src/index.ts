@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { createApp } from './app.js';
 import { initDb } from './db/init.js';
+import { startSurveyScheduler } from './modules/bot/survey.js';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
@@ -10,6 +11,7 @@ async function main() {
   app.listen(PORT, () => {
     console.log(`Cement ERP server listening on port ${PORT}`);
   });
+  startSurveyScheduler();
 }
 
 main().catch((err) => {

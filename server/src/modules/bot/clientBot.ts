@@ -1,6 +1,7 @@
 import { pool } from '../../db/pool.js';
 import { CLIENT_ADJ_PLUS_SUBQUERY, CLIENT_PAID_SUBQUERY, UZS_SALE } from '../reports/routes.js';
 import { buildClientWorkbook } from './clientReport.js';
+import { orderText } from './survey.js';
 import { keyboard, sendDocument, tg, type Button } from './telegram.js';
 
 /** Бот для клиентов: баланс, покупки и платежи за выбранный период. Клиент видит только свои данные —
@@ -87,6 +88,10 @@ export async function handleClientUpdate(token: string, chatId: number, link: Cl
       [{ text: '📎 Выписка в Excel', data: 'c:xls' }],
     ]);
 
+  if (data.startsWith('d:')) {
+    await handleDeliveryAnswer(token, say, link, data);
+    return;
+  }
   if (!data.startsWith('c:')) {
     await menu();
     return;
@@ -119,4 +124,38 @@ export async function handleClientUpdate(token: string, chatId: number, link: Cl
     return;
   }
   await menu();
+}
+
+/** Ответ клиента на вопрос «заказ доставлен?»: d:<id продажи>:y|n. Видит и отвечает только по своим заказам. */
+async function handleDeliveryAnswer(token: string, say: (t: string, b?: Button[][]) => Promise<void>, link: ClientLink, data: string): Promise<void> {
+  const [, idRaw, answer] = data.split(':');
+  const saleId = Number(idRaw);
+  const { rows } = await pool.query(
+    `SELECT s.id, s.date, s.sale_type, cm.name AS mark, s.packaging, s.tonnage, s.total_sum, s.delivery_status,
+            COALESCE(ov.number, s.machine_number) AS machine
+     FROM sales s LEFT JOIN cement_marks cm ON cm.id = s.cement_mark_id LEFT JOIN machines ov ON ov.id = s.own_vehicle_id
+     WHERE s.id = $1 AND s.client_id = $2`,
+    [saleId, link.client_id],
+  );
+  const sale = rows[0];
+  if (!sale || (answer !== 'y' && answer !== 'n')) {
+    await say('Не нашёл этот заказ.');
+    return;
+  }
+  if (sale.delivery_status === 'yes' || sale.delivery_status === 'no') {
+    await say(`По этому заказу ответ уже получен: ${sale.delivery_status === 'yes' ? 'доставлен' : 'не доставлен'}.`);
+    return;
+  }
+  await pool.query(`UPDATE sales SET delivery_status = $1, delivery_answered_at = now() WHERE id = $2`, [answer === 'y' ? 'yes' : 'no', saleId]);
+  const brief = orderText(sale).split('\n').join(' · ');
+  if (answer === 'y') {
+    await say(`✅ Спасибо! Доставка подтверждена:\n${brief}`);
+    return;
+  }
+  await say(`Спасибо, что сообщили. Мы свяжемся с вами и разберёмся:\n${brief}`);
+  // Менеджерам сразу сообщаем, что клиент не получил заказ.
+  const { rows: managers } = await pool.query('SELECT telegram_id FROM bot_managers WHERE telegram_id IS NOT NULL AND active');
+  for (const m of managers) {
+    await tg(token, 'sendMessage', { chat_id: m.telegram_id, text: `⚠️ Клиент ${link.name} сообщил, что заказ НЕ доставлен:\n${brief}` }).catch(() => undefined);
+  }
 }

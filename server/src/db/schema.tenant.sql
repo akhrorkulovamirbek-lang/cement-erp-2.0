@@ -526,3 +526,13 @@ UPDATE clients SET bot_code = upper(substr(md5(random()::text || id::text), 1, 1
 
 -- Ник клиента в Телеграме (без @, строчными): по нему бот узнаёт клиента без кода.
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS telegram_username TEXT UNIQUE;
+
+-- Опрос клиентов о доставке: вечером бот спрашивает «заказ доставлен?» (asked — вопрос отправлен, yes/no — ответ клиента).
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_status TEXT CHECK (delivery_status IN ('asked', 'yes', 'no'));
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_asked_at TIMESTAMPTZ;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_answered_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS bot_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);

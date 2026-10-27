@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { ApiError } from '@/api/client';
-import { useBotClientLinks, useDisconnectBotClient, useRegenerateBotCode, useAddBotManager, useBotConfig, useBotManagers, useDeleteBotManager, useRemoveBot, useSaveBotToken } from '@/api/modules';
+import { useRunSurvey, useSurveySettings, useUpdateSurvey, useBotClientLinks, useDisconnectBotClient, useRegenerateBotCode, useAddBotManager, useBotConfig, useBotManagers, useDeleteBotManager, useRemoveBot, useSaveBotToken } from '@/api/modules';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { PlainSelect } from '@/components/form';
 import { useToast } from '@/lib/toast';
 
 /** Настройки Телеграм-бота: ключ бота от @BotFather и список менеджеров, которым разрешено присылать заявки. */
@@ -16,6 +18,9 @@ export function BotSettings() {
   const removeBot = useRemoveBot();
   const addManager = useAddBotManager();
   const delManager = useDeleteBotManager();
+  const survey = useSurveySettings();
+  const updateSurvey = useUpdateSurvey();
+  const runSurvey = useRunSurvey();
   const links = useBotClientLinks();
   const regenerate = useRegenerateBotCode();
   const disconnect = useDisconnectBotClient();
@@ -144,6 +149,40 @@ export function BotSettings() {
               ))}
             {(links.data ?? []).length === 0 && <p className="text-sm text-muted-foreground">Клиентов пока нет.</p>}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-3">
+          <h3 className="font-semibold">4. Опрос клиентов о доставке</h3>
+          <p className="text-sm text-muted-foreground">
+            Каждый вечер бот спрашивает клиентов про их заказы за последние дни: «Ваш заказ был доставлен?» с кнопками «Да» и «Нет». Спрашивает только про отгруженные заказы и только тех клиентов, кто
+            подключён к боту. Ответ виден в «Продажах» в колонке «Доставка». Если клиент ответил «Нет», менеджерам в боте сразу приходит сообщение.
+          </p>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <Switch checked={survey.data?.enabled ?? true} onCheckedChange={(v) => updateSurvey.mutateAsync({ enabled: v }).catch(err)} />
+            <span>Присылать опрос каждый день в</span>
+            <PlainSelect
+              value={String(survey.data?.hour ?? 18)}
+              onValueChange={(v) => updateSurvey.mutateAsync({ hour: Number(v) }).catch(err)}
+              className="w-24"
+              options={Array.from({ length: 12 }, (_, i) => ({ value: String(i + 12), label: `${i + 12}:00` }))}
+            />
+            <span className="text-muted-foreground">по Ташкенту</span>
+          </div>
+          {survey.data?.lastRun && <p className="text-xs text-muted-foreground">Последний раз опрос отправлялся: {survey.data.lastRun}</p>}
+          <Button
+            variant="outline"
+            disabled={runSurvey.isPending}
+            onClick={() =>
+              runSurvey
+                .mutateAsync()
+                .then((r) => notify(r.asked > 0 ? `Опрос отправлен: заказов — ${r.asked}` : 'Некого спрашивать: нет отгруженных заказов подключённых клиентов'))
+                .catch(err)
+            }
+          >
+            Отправить опрос сейчас
+          </Button>
         </CardContent>
       </Card>
     </div>
