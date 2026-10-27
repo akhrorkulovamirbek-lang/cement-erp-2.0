@@ -9,7 +9,7 @@ import {
   machinesHooks,
   salesHooks,
   ticketsHooks,
-  useMarkDelivered,
+  useSetDelivery,
   useShipSale,
   useSuggestions,
   useWarehouseBalance,
@@ -27,6 +27,7 @@ import { SidePanel } from '@/components/SidePanel';
 import { FormRow, Input, PlainSelect, RHFCheckbox, RHFSelect } from '@/components/form';
 import { SuggestInput } from '@/components/SuggestInput';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { PACKAGING_LABELS, SALE_TYPE_OPTIONS, VEHICLE_TYPE_OPTIONS, VEHICLE_TYPE_LABELS } from '@/lib/constants';
 import { formatDate, formatMoney, formatNumber, todayISO } from '@/lib/format';
 import { normalizePlateNumber } from '@/lib/utils';
@@ -114,7 +115,7 @@ export function Sales() {
     q: q || undefined,
   });
   const ship = useShipSale();
-  const markDelivered = useMarkDelivered();
+  const setDelivery = useSetDelivery();
   const create = salesHooks.useCreate();
   const update = salesHooks.useUpdate();
   const del = salesHooks.useDelete();
@@ -273,10 +274,10 @@ export function Sales() {
     }
   }
 
-  async function onDelivered(row: Sale) {
+  async function onDelivery(row: Sale, status: 'yes' | 'no' | null) {
     try {
-      await markDelivered.mutateAsync(row.id);
-      notify('Доставка подтверждена');
+      await setDelivery.mutateAsync({ id: row.id, status });
+      notify(status === 'yes' ? 'Отмечено: доставлен' : status === 'no' ? 'Отмечено: не доставлен' : 'Отметка о доставке снята');
     } catch (err) {
       notify(err instanceof ApiError ? err.message : 'Ошибка', 'error');
     }
@@ -447,8 +448,17 @@ export function Sales() {
       <DataTable footer={salesFooter} columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} extraRowAction={(r) =>
         r.awaiting_shipment ? (
           <Button variant="outline" size="sm" onClick={() => onShip(r)}>Отгрузить</Button>
-        ) : r.delivery_status === 'no' || r.delivery_status === 'asked' ? (
-          <Button variant="outline" size="sm" onClick={() => onDelivered(r)}>Доставлен</Button>
+        ) : r.client_id && !r.is_historical ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">Доставка ▾</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onDelivery(r, 'yes')}>Доставлен</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onDelivery(r, 'no')}>Не доставлен</DropdownMenuItem>
+              {r.delivery_status && <DropdownMenuItem onClick={() => onDelivery(r, null)}>Снять отметку</DropdownMenuItem>}
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : null
       } onEdit={openEdit} onDelete={(r) => (r.source === 'direct' ? notify('Эта продажа связана с приходом «Напрямую» — удалите её через Приход', 'error') : setDeleting(r))} />
 

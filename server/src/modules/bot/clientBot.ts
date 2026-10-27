@@ -143,7 +143,7 @@ async function handleDeliveryAnswer(token: string, say: (t: string, b?: Button[]
     return;
   }
   if (sale.delivery_status === 'yes' || sale.delivery_status === 'no') {
-    await say(`По этому заказу ответ уже получен: ${sale.delivery_status === 'yes' ? 'доставлен' : 'не доставлен'}.`);
+    await say(`По этому заказу уже есть отметка: ${sale.delivery_status === 'yes' ? 'доставлен' : 'не доставлен'}.`);
     return;
   }
   await pool.query(`UPDATE sales SET delivery_status = $1, delivery_answered_at = now() WHERE id = $2`, [answer === 'y' ? 'yes' : 'no', saleId]);

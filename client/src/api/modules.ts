@@ -177,10 +177,10 @@ export function useShipSale() {
   });
 }
 
-export function useMarkDelivered() {
+export function useSetDelivery() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => api.post<unknown>(`/sales/${id}/delivered`),
+    mutationFn: (p: { id: number; status: 'yes' | 'no' | null }) => api.post<unknown>(`/sales/${p.id}/delivery`, { status: p.status }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sales'] }),
   });
 }

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { pool, withTransaction } from '../../db/pool.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
-import { notFound } from '../../lib/errors.js';
+import { badRequest, notFound } from '../../lib/errors.js';
 import { saleSchema } from './schema.js';
 import { createSale, deleteSale, updateSale } from './service.js';
 import { notifySale } from '../bot/clientNotify.js';
@@ -95,6 +95,24 @@ salesRouter.post(
   asyncHandler(async (req, res) => {
     const { rows } = await pool.query('UPDATE sales SET awaiting_shipment = false WHERE id = $1 RETURNING *', [req.params.id]);
     if (!rows[0]) throw notFound('Продажа не найдена');
+    res.json(rows[0]);
+  }),
+);
+
+// Оператор сам отмечает доставку любого отгруженного заказа: «доставлен», «не доставлен» или сбрасывает отметку.
+// Клиенту вопрос о доставке по такому заказу уже не отправляется.
+salesRouter.post(
+  '/:id/delivery',
+  asyncHandler(async (req, res) => {
+    const status = req.body?.status as string | null;
+    if (status !== 'yes' && status !== 'no' && status !== null) throw badRequest('Неизвестный статус доставки');
+    const { rows } = await pool.query(
+      `UPDATE sales SET delivery_status = $1, delivery_answered_at = CASE WHEN $1::text IS NULL THEN NULL ELSE now() END,
+              delivery_asked_at = CASE WHEN $1::text IS NULL THEN NULL ELSE COALESCE(delivery_asked_at, now()) END
+       WHERE id = $2 AND awaiting_shipment = false RETURNING *`,
+      [status, req.params.id],
+    );
+    if (!rows[0]) throw badRequest('Сначала отгрузите заказ — потом можно отметить доставку');
     res.json(rows[0]);
   }),
 );
