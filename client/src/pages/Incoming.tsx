@@ -273,6 +273,7 @@ export function IncomingPage() {
       render: (r) => r.client_name || '—',
     },
     { key: 'packaging', header: 'Упаковка', render: (r) => PACKAGING_LABELS[r.packaging] },
+    { key: 'machine_display', header: 'Машина', sortValue: (r) => r.machine_display ?? '', render: (r) => r.machine_display || '—' },
     {
       key: 'tonnage',
       header: 'Тоннаж',

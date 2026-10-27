@@ -33,14 +33,14 @@ incomingRouter.get(
       params.push(to);
       conditions.push(`i.date <= $${params.length}`);
     }
-    if (q) {
-      params.push(`%${q}%`);
-      conditions.push(`i.machine_number ILIKE $${params.length}`);
-    }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
-      `SELECT i.*, z.name AS zavod_name, cm.name AS cement_mark_name, c.name AS client_name, f.name AS factory_name
+      `SELECT i.*, z.name AS zavod_name, cm.name AS cement_mark_name, c.name AS client_name, f.name AS factory_name,
+              -- Машина: номер из самого прихода, а у прямой продажи — машина, на которой цемент поехал клиенту.
+              COALESCE(NULLIF(i.machine_number, ''), COALESCE(ov.number, ls.machine_number)) AS machine_display
        FROM incoming i
+       LEFT JOIN sales ls ON ls.id = i.linked_sale_id
+       LEFT JOIN machines ov ON ov.id = ls.own_vehicle_id
        LEFT JOIN factories f ON f.id = i.factory_id
        JOIN zavody z ON z.id = i.zavod_id
        JOIN cement_marks cm ON cm.id = i.cement_mark_id
@@ -49,6 +49,13 @@ incomingRouter.get(
        ORDER BY i.date DESC, i.id DESC`,
       params,
     );
+    if (q) {
+      // Регистр и пробелы сравниваем в JS — так поиск не зависит от настроек локали базы.
+      const norm = (v: unknown) => String(v ?? '').replace(/\s+/g, '').toUpperCase();
+      const needle = norm(q);
+      res.json(rows.filter((r) => norm(r.machine_display).includes(needle)));
+      return;
+    }
     res.json(rows);
   }),
 );

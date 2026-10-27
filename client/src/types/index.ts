@@ -208,6 +208,7 @@ export interface Incoming {
   price_per_ton: string;
   total_sum: string;
   machine_number: string | null;
+  machine_display: string | null;
   factory_id: number | null;
   factory_name: string | null;
   client_id: number | null;
