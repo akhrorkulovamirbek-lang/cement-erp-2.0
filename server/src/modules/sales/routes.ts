@@ -11,7 +11,7 @@ export const salesRouter = Router();
 salesRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const { client_id, cement_mark_id, from, to, source, sale_type, deferred, awaiting, q, factory_id, zavod_id } = req.query;
+    const { client_id, cement_mark_id, from, to, source, sale_type, deferred, awaiting, q, factory_id, zavod_id, delivery } = req.query;
     const conditions: string[] = [];
     const params: unknown[] = [];
     if (client_id) {
@@ -48,6 +48,10 @@ salesRouter.get(
     }
     if (deferred === '1') conditions.push('s.is_deferred = true');
     if (awaiting === '1') conditions.push('s.awaiting_shipment = true');
+    if (delivery === 'no' || delivery === 'asked' || delivery === 'yes') {
+      params.push(delivery);
+      conditions.push(`s.delivery_status = $${params.length}`);
+    }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
       `SELECT s.*, c.name AS client_name, z.name AS zavod_name, cm.name AS cement_mark_name,
@@ -90,6 +94,19 @@ salesRouter.post(
   '/:id/ship',
   asyncHandler(async (req, res) => {
     const { rows } = await pool.query('UPDATE sales SET awaiting_shipment = false WHERE id = $1 RETURNING *', [req.params.id]);
+    if (!rows[0]) throw notFound('Продажа не найдена');
+    res.json(rows[0]);
+  }),
+);
+
+// Оператор сам подтверждает доставку (например, после звонка клиенту), когда клиент не ответил в боте или ответил «Нет».
+salesRouter.post(
+  '/:id/delivered',
+  asyncHandler(async (req, res) => {
+    const { rows } = await pool.query(
+      `UPDATE sales SET awaiting_shipment = false, delivery_status = 'yes', delivery_answered_at = now() WHERE id = $1 RETURNING *`,
+      [req.params.id],
+    );
     if (!rows[0]) throw notFound('Продажа не найдена');
     res.json(rows[0]);
   }),

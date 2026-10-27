@@ -9,6 +9,7 @@ import {
   machinesHooks,
   salesHooks,
   ticketsHooks,
+  useMarkDelivered,
   useShipSale,
   useSuggestions,
   useWarehouseBalance,
@@ -80,6 +81,15 @@ const emptyForm = (): FormValues => ({
   comment: '',
 });
 
+/** Статус заказа: ждёт отгрузки → отгружен → клиент подтвердил «доставлен» или написал, что не доставлен. */
+function statusLabel(r: Sale): string {
+  if (r.awaiting_shipment) return 'Ждёт отгрузки';
+  if (r.delivery_status === 'yes') return 'Доставлен';
+  if (r.delivery_status === 'no') return 'Не доставлен';
+  if (r.delivery_status === 'asked') return 'Ждём подтверждения клиента';
+  return r.is_historical || !r.client_id ? '' : 'Отгружен';
+}
+
 export function Sales() {
   const { notify } = useToast();
   const [from, setFrom] = useState('');
@@ -100,9 +110,11 @@ export function Sales() {
     zavod_id: zavodFilter || undefined,
     deferred: statusFilter === 'deferred' ? '1' : undefined,
     awaiting: statusFilter === 'awaiting' ? '1' : undefined,
+    delivery: statusFilter === 'undelivered' ? 'no' : statusFilter === 'unconfirmed' ? 'asked' : statusFilter === 'delivered' ? 'yes' : undefined,
     q: q || undefined,
   });
   const ship = useShipSale();
+  const markDelivered = useMarkDelivered();
   const create = salesHooks.useCreate();
   const update = salesHooks.useUpdate();
   const del = salesHooks.useDelete();
@@ -261,6 +273,15 @@ export function Sales() {
     }
   }
 
+  async function onDelivered(row: Sale) {
+    try {
+      await markDelivered.mutateAsync(row.id);
+      notify('Доставка подтверждена');
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : 'Ошибка', 'error');
+    }
+  }
+
   async function onShip(row: Sale) {
     try {
       await ship.mutateAsync(row.id);
@@ -296,22 +317,13 @@ export function Sales() {
     {
       key: 'awaiting_shipment',
       header: 'Статус',
-      render: (r) => (r.awaiting_shipment ? <Badge tone="amber">Ждёт отгрузки</Badge> : ''),
-    },
-    {
-      key: 'delivery_status',
-      header: 'Доставка',
-      sortValue: (r) => (r.delivery_status === 'yes' ? 'Подтверждена клиентом' : r.delivery_status === 'no' ? 'Клиент: не доставлено' : r.delivery_status === 'asked' ? 'Ждём ответ клиента' : '—'),
-      render: (r) =>
-        r.delivery_status === 'yes' ? (
-          <Badge tone="green">Подтверждена клиентом</Badge>
-        ) : r.delivery_status === 'no' ? (
-          <Badge tone="red">Клиент: не доставлено</Badge>
-        ) : r.delivery_status === 'asked' ? (
-          <Badge tone="slate">Ждём ответ клиента</Badge>
-        ) : (
-          '—'
-        ),
+      sortValue: (r) => statusLabel(r),
+      render: (r) => {
+        const label = statusLabel(r);
+        if (!label) return '';
+        const tone = r.awaiting_shipment ? 'amber' : r.delivery_status === 'yes' ? 'green' : r.delivery_status === 'no' ? 'red' : r.delivery_status === 'asked' ? 'blue' : 'slate';
+        return <Badge tone={tone}>{label}</Badge>;
+      },
     },
     {
       key: 'client_name',
@@ -424,12 +436,21 @@ export function Sales() {
           options={[
             { value: '', label: 'Все продажи' },
             { value: 'awaiting', label: 'Ждут отгрузки' },
+            { value: 'unconfirmed', label: 'Ждём подтверждения клиента' },
+            { value: 'delivered', label: 'Доставлены' },
+            { value: 'undelivered', label: 'Не доставлены' },
             { value: 'deferred', label: 'Только отложенные' },
           ]}
         />
       </FilterBar>
 
-      <DataTable footer={salesFooter} columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} extraRowAction={(r) => (r.awaiting_shipment ? <Button variant="outline" size="sm" onClick={() => onShip(r)}>Отгрузить</Button> : null)} onEdit={openEdit} onDelete={(r) => (r.source === 'direct' ? notify('Эта продажа связана с приходом «Напрямую» — удалите её через Приход', 'error') : setDeleting(r))} />
+      <DataTable footer={salesFooter} columns={columns} rows={list.data ?? []} loading={list.isLoading} getRowId={(r) => r.id} extraRowAction={(r) =>
+        r.awaiting_shipment ? (
+          <Button variant="outline" size="sm" onClick={() => onShip(r)}>Отгрузить</Button>
+        ) : r.delivery_status === 'no' || r.delivery_status === 'asked' ? (
+          <Button variant="outline" size="sm" onClick={() => onDelivered(r)}>Доставлен</Button>
+        ) : null
+      } onEdit={openEdit} onDelete={(r) => (r.source === 'direct' ? notify('Эта продажа связана с приходом «Напрямую» — удалите её через Приход', 'error') : setDeleting(r))} />
 
       {editing && (
         <SidePanel title={editing === 'new' ? 'Новая продажа' : 'Изменить продажу'} onClose={() => setEditing(null)} widthClass="sm:max-w-xl">

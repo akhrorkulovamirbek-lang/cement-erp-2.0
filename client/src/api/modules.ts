@@ -177,6 +177,14 @@ export function useShipSale() {
   });
 }
 
+export function useMarkDelivered() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.post<unknown>(`/sales/${id}/delivered`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sales'] }),
+  });
+}
+
 export function useReplenishBroker() {
   const qc = useQueryClient();
   return useMutation({
