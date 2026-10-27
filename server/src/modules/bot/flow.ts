@@ -1,4 +1,5 @@
 import { pool } from '../../db/pool.js';
+import { handleClientUpdate, type ClientLink } from './clientBot.js';
 import { buildPayload, summaryOf, type Data } from './payload.js';
 import { keyboard, tg, type Button } from './telegram.js';
 
@@ -285,7 +286,7 @@ async function route(ctx: Ctx, update: IncomingUpdate, telegramId: number): Prom
     await del(state.promptId);
   }
   if (cb?.message) {
-    const keepsText = !(data.startsWith('s:') || data === 'cancel' || data === 'go' || cb.message.text?.startsWith('Здравствуйте'));
+    const keepsText = !(data.startsWith('s:') || data === 'cancel' || data === 'go' || cb.message.text?.startsWith('Здравствуйте') || cb.message.text?.startsWith('За какой период'));
     if (keepsText) {
       await tg(token, 'editMessageReplyMarkup', { chat_id: chatId, message_id: cb.message.message_id, reply_markup: { inline_keyboard: [] } }).catch(() => undefined);
     } else {
@@ -295,6 +296,18 @@ async function route(ctx: Ctx, update: IncomingUpdate, telegramId: number): Prom
 
   const { rows: found } = await pool.query('SELECT id, name FROM bot_managers WHERE telegram_id = $1 AND active', [telegramId]);
   const manager = found[0] as { id: number; name: string } | undefined;
+
+  // Клиент компании: видит только свой баланс, покупки и платежи.
+  if (!manager) {
+    const { rows: links } = await pool.query(
+      `SELECT l.id, l.client_id, c.name FROM bot_client_links l JOIN clients c ON c.id = l.client_id WHERE l.telegram_id = $1`,
+      [telegramId],
+    );
+    if (links[0]) {
+      await handleClientUpdate(token, chatId, links[0] as ClientLink, text, data);
+      return;
+    }
+  }
 
   // Незнакомый человек: пускаем только по одноразовому коду, который выдал оператор в системе.
   if (!manager) {
@@ -306,6 +319,15 @@ async function route(ctx: Ctx, update: IncomingUpdate, telegramId: number): Prom
       );
       if (rows[0]) {
         await menu(ctx, rows[0].name);
+        return;
+      }
+      const { rows: linked } = await pool.query(
+        `UPDATE bot_client_links l SET telegram_id = $1, link_code = NULL FROM clients c
+         WHERE l.link_code = $2 AND l.telegram_id IS NULL AND c.id = l.client_id RETURNING l.id, l.client_id, c.name`,
+        [telegramId, code],
+      );
+      if (linked[0]) {
+        await handleClientUpdate(token, chatId, linked[0] as ClientLink, '', '');
         return;
       }
     }

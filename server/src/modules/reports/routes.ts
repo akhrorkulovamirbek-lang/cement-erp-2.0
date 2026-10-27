@@ -6,18 +6,18 @@ import { CARRIER_BALANCES_SQL } from '../../lib/carrierBalances.js';
 export const reportsRouter = Router();
 
 // Раздел 12.2 ТЗ: цены в Приходе/Продаже — только в сумах, доллары только в движении денег.
-const UZS_SALE = `s.total_sum`;
+export const UZS_SALE = `s.total_sum`;
 // extra_amount — смешанный платёж одной строкой (раздел «Ясность по деньгам»): вторая часть в
 // валюте, дополняющей currency, учитываем её в конвертации тем же курсом usd_rate.
-const UZS_INCOME = `
+export const UZS_INCOME = `
   (CASE WHEN currency = 'USD' THEN amount * usd_rate ELSE amount END)
   + COALESCE(CASE WHEN currency = 'USD' THEN extra_amount ELSE extra_amount * usd_rate END, 0)
 `;
-const UZS_EXPENSE = `CASE WHEN currency = 'USD' THEN amount * usd_rate ELSE amount END`;
+export const UZS_EXPENSE = `CASE WHEN currency = 'USD' THEN amount * usd_rate ELSE amount END`;
 
 // Раздел 9.2 ТЗ «Оплата товаром»: клиент гасит долг цементом — incoming.warehouse='CLIENT_GOODS'
 // считается оплатой наравне с cash_income, но НЕ покупкой у завода (см. CLIENT_GOODS_EXCLUDE ниже).
-const CLIENT_PAID_SUBQUERY = `
+export const CLIENT_PAID_SUBQUERY = `
   SELECT client_id, SUM(amount_uzs) AS total FROM (
     SELECT client_id, (${UZS_INCOME}) AS amount_uzs FROM cash_income WHERE client_id IS NOT NULL
     UNION ALL
@@ -30,7 +30,7 @@ const CLIENT_PAID_SUBQUERY = `
   ) t GROUP BY client_id
 `;
 // Корректировка долга клиента: положительная увеличивает «куплено», отрицательная уходит в «оплачено».
-const CLIENT_ADJ_PLUS_SUBQUERY = `SELECT client_id, SUM(amount) AS total FROM client_debt_adjustments WHERE amount > 0 GROUP BY client_id`;
+export const CLIENT_ADJ_PLUS_SUBQUERY = `SELECT client_id, SUM(amount) AS total FROM client_debt_adjustments WHERE amount > 0 GROUP BY client_id`;
 const ZAVOD_PURCHASED_EXCLUDE_CLIENT_GOODS = `warehouse <> 'CLIENT_GOODS'`;
 
 reportsRouter.get(

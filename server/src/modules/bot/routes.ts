@@ -204,3 +204,39 @@ botRouter.delete(
     res.status(204).end();
   }),
 );
+
+// ---- Клиенты бота: коды доступа к своему отчёту ----
+
+botRouter.get(
+  '/client-links',
+  requirePermission('settings'),
+  asyncHandler(async (_req, res) => {
+    const { rows } = await pool.query(
+      `SELECT l.id, l.client_id, c.name AS client_name, l.link_code, l.telegram_id IS NOT NULL AS linked
+       FROM bot_client_links l JOIN clients c ON c.id = l.client_id ORDER BY c.name, l.id`,
+    );
+    res.json(rows);
+  }),
+);
+
+botRouter.post(
+  '/client-links',
+  requirePermission('settings'),
+  asyncHandler(async (req, res) => {
+    const { client_id } = z.object({ client_id: z.coerce.number().int().positive('Выберите клиента') }).parse(req.body);
+    const { rows: c } = await pool.query('SELECT 1 FROM clients WHERE id = $1', [client_id]);
+    if (!c[0]) throw notFound('Клиент не найден');
+    const code = crypto.randomBytes(4).toString('hex').toUpperCase();
+    const { rows } = await pool.query('INSERT INTO bot_client_links (client_id, link_code) VALUES ($1, $2) RETURNING id, link_code', [client_id, code]);
+    res.status(201).json(rows[0]);
+  }),
+);
+
+botRouter.delete(
+  '/client-links/:id',
+  requirePermission('settings'),
+  asyncHandler(async (req, res) => {
+    await pool.query('DELETE FROM bot_client_links WHERE id = $1', [Number(req.params.id)]);
+    res.status(204).end();
+  }),
+);

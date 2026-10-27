@@ -571,3 +571,28 @@ export function useSubmitQuickOrder() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['bot-requests'] }),
   });
 }
+
+export interface BotClientLink {
+  id: number;
+  client_id: number;
+  client_name: string;
+  link_code: string | null;
+  linked: boolean;
+}
+export function useBotClientLinks() {
+  return useQuery({ queryKey: ['bot-client-links'], queryFn: () => api.get<BotClientLink[]>('/bot/client-links') });
+}
+export function useAddBotClientLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (client_id: number) => api.post<{ id: number; link_code: string }>('/bot/client-links', { client_id }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bot-client-links'] }),
+  });
+}
+export function useDeleteBotClientLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.delete<void>(`/bot/client-links/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bot-client-links'] }),
+  });
+}

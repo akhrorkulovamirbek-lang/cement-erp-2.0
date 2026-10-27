@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { ApiError } from '@/api/client';
-import { useAddBotManager, useBotConfig, useBotManagers, useDeleteBotManager, useRemoveBot, useSaveBotToken } from '@/api/modules';
+import { clientsHooks, useAddBotClientLink, useBotClientLinks, useDeleteBotClientLink, useAddBotManager, useBotConfig, useBotManagers, useDeleteBotManager, useRemoveBot, useSaveBotToken } from '@/api/modules';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/ui/button';
+import { PlainSelect } from '@/components/form';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/lib/toast';
@@ -16,6 +17,11 @@ export function BotSettings() {
   const removeBot = useRemoveBot();
   const addManager = useAddBotManager();
   const delManager = useDeleteBotManager();
+  const clients = clientsHooks.useList();
+  const links = useBotClientLinks();
+  const addLink = useAddBotClientLink();
+  const delLink = useDeleteBotClientLink();
+  const [clientId, setClientId] = useState('');
   const [token, setToken] = useState('');
   const [name, setName] = useState('');
 
@@ -101,6 +107,54 @@ export function BotSettings() {
               </div>
             ))}
             {(managers.data ?? []).length === 0 && <p className="text-sm text-muted-foreground">Менеджеров пока нет.</p>}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-3">
+          <h3 className="font-semibold">3. Клиенты</h3>
+          <p className="text-sm text-muted-foreground">
+            Клиент может сам смотреть в боте свой баланс, покупки и платежи. Выберите клиента — система выдаст код. Передайте код клиенту: он открывает бота{username ? ` @${username}` : ''} и отправляет его.
+            Клиент видит только свои данные, закупочных цен и маржи ему не показывается. Одному клиенту можно выдать несколько кодов (для разных сотрудников).
+          </p>
+          <div className="flex gap-2">
+            <PlainSelect
+              value={clientId}
+              onValueChange={setClientId}
+              placeholder="Выберите клиента"
+              className="min-w-0 flex-1"
+              options={(clients.data ?? []).map((c) => ({ value: String(c.id), label: c.name }))}
+            />
+            <Button
+              disabled={addLink.isPending || !clientId}
+              onClick={() =>
+                addLink
+                  .mutateAsync(Number(clientId))
+                  .then(() => setClientId(''))
+                  .catch(err)
+              }
+            >
+              Создать код
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {(links.data ?? []).map((l) => (
+              <div key={l.id} className="flex flex-wrap items-center gap-3 rounded-md border p-3 text-sm">
+                <span className="font-medium">{l.client_name}</span>
+                {l.linked ? (
+                  <Badge tone="green">Подключён</Badge>
+                ) : (
+                  <span>
+                    Код: <b className="font-mono tracking-wider">{l.link_code}</b>
+                  </span>
+                )}
+                <Button variant="outline" size="sm" className="ml-auto" onClick={() => delLink.mutateAsync(l.id).catch(err)}>
+                  {l.linked ? 'Отключить' : 'Удалить'}
+                </Button>
+              </div>
+            ))}
+            {(links.data ?? []).length === 0 && <p className="text-sm text-muted-foreground">Клиентов в боте пока нет.</p>}
           </div>
         </CardContent>
       </Card>

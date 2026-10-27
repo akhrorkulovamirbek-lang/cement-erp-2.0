@@ -510,3 +510,12 @@ CREATE TABLE IF NOT EXISTS sale_requests (
   decided_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Клиенты в Телеграм-боте: отчёт по своим покупкам и платежам. Один клиент может подключить нескольких людей.
+CREATE TABLE IF NOT EXISTS bot_client_links (
+  id SERIAL PRIMARY KEY,
+  client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  link_code TEXT UNIQUE,
+  telegram_id BIGINT UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
