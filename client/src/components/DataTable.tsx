@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ChevronsUpDown, Filter, Pencil, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, Columns3, Filter, Pencil, Trash2 } from 'lucide-react';
 import { Popover } from 'radix-ui';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
@@ -57,6 +57,23 @@ export function DataTable<T>({
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
   // Фильтры по колонкам как в Excel: для колонки хранится набор РАЗРЕШЁННЫХ значений.
   const [colFilters, setColFilters] = useState<Record<string, Set<string>>>({});
+  // Скрытые колонки запоминаются в браузере отдельно для каждой таблицы (ключ — набор её колонок).
+  const storageKey = `dt.hidden.${columns.map((c) => c.key).join(',')}`;
+  const [hidden, setHiddenState] = useState<Set<string>>(() => {
+    try {
+      return new Set<string>(JSON.parse(localStorage.getItem(storageKey) ?? '[]'));
+    } catch {
+      return new Set<string>();
+    }
+  });
+  function setHidden(next: Set<string>) {
+    setHiddenState(next);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify([...next]));
+    } catch {
+      /* без памяти браузера скрытие просто не запомнится */
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -104,16 +121,21 @@ export function DataTable<T>({
   const cardRows = !loading ? sorted : [];
   const footerCells = footer ? (typeof footer === 'function' ? footer(sorted) : footer) : null;
   const activeFilters = Object.keys(colFilters).length;
+  // Колонки, которые видны сейчас (с исходным номером — по нему подбираются ячейки строки итогов).
+  const visible = columns.map((col, i) => ({ col, i })).filter(({ col }) => !hidden.has(col.key));
+  const showColumnsButton = columns.length >= 3;
 
   return (
     <>
-    {searchable && (
-      <Input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder={searchPlaceholder}
-        className="mb-3 w-full sm:max-w-xs"
-      />
+    {(searchable || showColumnsButton) && (
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {searchable && (
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={searchPlaceholder} className="w-full sm:max-w-xs" />
+        )}
+        {showColumnsButton && (
+          <ColumnsMenu columns={columns} hidden={hidden} onChange={setHidden} />
+        )}
+      </div>
     )}
     {activeFilters > 0 && (
       <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
@@ -132,7 +154,7 @@ export function DataTable<T>({
       {cardRows.map((row) => (
         <div key={getRowId(row)} className="rounded-lg border bg-card p-3 text-sm shadow-xs">
           <dl className="space-y-1.5">
-            {columns.map((col) => {
+            {visible.map(({ col }) => {
               const content = col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? '');
               if (content === '' || content === null || content === undefined) return null;
               return (
@@ -163,7 +185,7 @@ export function DataTable<T>({
       {footerCells && !loading && sorted.length > 0 && (
         <div className="rounded-lg border bg-muted/50 p-3 text-sm font-medium">
           <div className="space-y-1.5">
-            {columns.map((col, i) =>
+            {visible.map(({ col, i }) =>
               footerCells[i] ? (
                 <div key={col.key} className="flex items-start justify-between gap-3">
                   <span className="shrink-0 text-muted-foreground">{col.header}</span>
@@ -180,7 +202,7 @@ export function DataTable<T>({
       <Table>
         <TableHeader>
           <TableRow>
-            {columns.map((col) => (
+            {visible.map(({ col }) => (
               <TableHead
                 key={col.key}
                 onClick={() => toggleSort(col)}
@@ -226,14 +248,14 @@ export function DataTable<T>({
         <TableBody>
           {loading && (
             <TableRow>
-              <TableCell colSpan={columns.length + 1} className="h-24 text-center text-muted-foreground">
+              <TableCell colSpan={visible.length + 1} className="h-24 text-center text-muted-foreground">
                 Загрузка…
               </TableCell>
             </TableRow>
           )}
           {!loading && sorted.length === 0 && (
             <TableRow>
-              <TableCell colSpan={columns.length + 1} className="h-24 text-center text-muted-foreground">
+              <TableCell colSpan={visible.length + 1} className="h-24 text-center text-muted-foreground">
                 {emptyMessage}
               </TableCell>
             </TableRow>
@@ -241,7 +263,7 @@ export function DataTable<T>({
           {!loading &&
             sorted.map((row) => (
               <TableRow key={getRowId(row)}>
-                {columns.map((col) => (
+                {visible.map(({ col }) => (
                   <TableCell
                     key={col.key}
                     className={cn(
@@ -277,7 +299,7 @@ export function DataTable<T>({
         {footerCells && !loading && sorted.length > 0 && (
           <TableFooter>
             <TableRow>
-              {columns.map((col, i) => (
+              {visible.map(({ col, i }) => (
                 <TableCell
                   key={col.key}
                   className={cn(
@@ -371,6 +393,46 @@ function ColumnFilter({
               <label key={v} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 hover:bg-muted">
                 <input type="checkbox" checked={isOn(v)} onChange={() => toggle(v)} />
                 <span className="truncate">{label(v)}</span>
+              </label>
+            ))}
+          </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+/** Кнопка «Колонки»: галочками выбираем, какие колонки показывать. Хотя бы одна всегда остаётся. */
+function ColumnsMenu<T>({ columns, hidden, onChange }: { columns: Column<T>[]; hidden: Set<string>; onChange: (next: Set<string>) => void }) {
+  const toggle = (key: string) => {
+    const next = new Set(hidden);
+    if (next.has(key)) next.delete(key);
+    else if (columns.length - next.size > 1) next.add(key);
+    onChange(next);
+  };
+  return (
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <Button variant="outline" size="sm" className="gap-1.5">
+          <Columns3 className="size-4" />
+          Колонки{hidden.size > 0 ? ` (скрыто ${hidden.size})` : ''}
+        </Button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content align="start" sideOffset={4} className="z-[70] w-64 rounded-md border bg-popover p-2 text-sm text-popover-foreground shadow-md">
+          <div className="mb-1 flex items-center justify-between px-1.5 text-xs text-muted-foreground">
+            <span>Показывать колонки</span>
+            {hidden.size > 0 && (
+              <button type="button" className="text-primary hover:underline" onClick={() => onChange(new Set())}>
+                Показать все
+              </button>
+            )}
+          </div>
+          <div className="max-h-72 overflow-y-auto">
+            {columns.map((c) => (
+              <label key={c.key} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 hover:bg-muted">
+                <input type="checkbox" checked={!hidden.has(c.key)} onChange={() => toggle(c.key)} />
+                <span className="truncate">{c.header || c.key}</span>
               </label>
             ))}
           </div>
