@@ -45,11 +45,12 @@ interface FormValues {
   inn: string;
   initial_debt: string;
   comment: string;
+  telegram_username: string;
   is_supplier: boolean;
   active: boolean;
 }
 
-const emptyForm = (): FormValues => ({ name: '', phone: '', contact_person: '', inn: '', initial_debt: '0', comment: '', is_supplier: false, active: true });
+const emptyForm = (): FormValues => ({ name: '', phone: '', contact_person: '', inn: '', initial_debt: '0', comment: '', telegram_username: '', is_supplier: false, active: true });
 
 export function Clients() {
   const { notify } = useToast();
@@ -82,6 +83,7 @@ export function Clients() {
       inn: row.inn ?? '',
       initial_debt: row.initial_debt,
       comment: row.comment ?? '',
+      telegram_username: row.telegram_username ?? '',
       is_supplier: row.is_supplier,
       active: row.active,
     });
@@ -96,6 +98,7 @@ export function Clients() {
       inn: data.inn || null,
       initial_debt: Number(data.initial_debt || 0),
       comment: data.comment || null,
+      telegram_username: data.telegram_username.trim() || null,
       is_supplier: data.is_supplier,
       active: data.active,
     };
@@ -215,6 +218,10 @@ export function Clients() {
             </FormRow>
             <FormRow label="Начальный долг">
               <Input type="number" step="0.01" {...register('initial_debt')} />
+            </FormRow>
+            <FormRow label="Ник в Телеграме (необязательно)">
+              <Input {...register('telegram_username')} placeholder="@username" autoCapitalize="none" />
+              <p className="mt-1 text-xs text-muted-foreground">Если указать, клиент сразу получит свой баланс и выписку в боте — код не нужен.</p>
             </FormRow>
             <FormRow label="Комментарий (необязательно)">
               <Textarea {...register('comment')} rows={2} />

@@ -523,3 +523,6 @@ CREATE TABLE IF NOT EXISTS bot_client_links (
 -- Постоянный код клиента для Телеграм-бота: создаётся сам, по нему клиент (или его сотрудники) подключаются к боту.
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS bot_code TEXT UNIQUE DEFAULT upper(substr(md5(random()::text), 1, 10));
 UPDATE clients SET bot_code = upper(substr(md5(random()::text || id::text), 1, 10)) WHERE bot_code IS NULL;
+
+-- Ник клиента в Телеграме (без @, строчными): по нему бот узнаёт клиента без кода.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS telegram_username TEXT UNIQUE;

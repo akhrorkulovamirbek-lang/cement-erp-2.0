@@ -236,8 +236,8 @@ async function searchClients(query: string) {
 }
 
 export interface IncomingUpdate {
-  message?: { message_id?: number; chat: { id: number }; from?: { id: number }; text?: string };
-  callback_query?: { id: string; from: { id: number }; data?: string; message?: { message_id: number; text?: string; chat: { id: number } } };
+  message?: { message_id?: number; chat: { id: number }; from?: { id: number; username?: string }; text?: string };
+  callback_query?: { id: string; from: { id: number; username?: string }; data?: string; message?: { message_id: number; text?: string; chat: { id: number } } };
 }
 
 export async function handleUpdate(token: string, update: IncomingUpdate): Promise<void> {
@@ -306,6 +306,20 @@ async function route(ctx: Ctx, update: IncomingUpdate, telegramId: number): Prom
     if (links[0]) {
       await handleClientUpdate(token, chatId, links[0] as ClientLink, text, data);
       return;
+    }
+    // Ник из карточки клиента совпал с ником в Телеграме — подключаем без кода.
+    const username = (msg?.from?.username ?? cb?.from.username)?.toLowerCase();
+    if (username) {
+      const { rows: byName } = await pool.query('SELECT id, name FROM clients WHERE telegram_username = $1 AND active', [username]);
+      if (byName[0]) {
+        await pool.query(
+          `INSERT INTO bot_client_links (client_id, telegram_id) VALUES ($1, $2)
+           ON CONFLICT (telegram_id) DO UPDATE SET client_id = EXCLUDED.client_id`,
+          [byName[0].id, telegramId],
+        );
+        await handleClientUpdate(token, chatId, { id: 0, client_id: byName[0].id, name: byName[0].name }, '', '');
+        return;
+      }
     }
   }
 

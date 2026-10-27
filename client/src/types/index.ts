@@ -18,6 +18,7 @@ export interface Client {
   inn: string | null;
   initial_debt: string;
   comment: string | null;
+  telegram_username: string | null;
   is_supplier: boolean;
   active: boolean;
   created_at: string;
