@@ -15,8 +15,9 @@ export function summaryOf(d: Data, names: Record<string, string>): string {
     if (value !== null && value !== undefined && value !== '') lines.push(`${label}: ${value}`);
   };
   const fmt = (v: unknown) => Number(v).toLocaleString('ru-RU');
-  add('Тип', d.sale_type === 'CEMENT' ? 'Цемент со склада' : d.sale_type === 'DIRECT' ? 'Напрямую от поставщика' : 'Логистика');
+  add('Тип', d.sale_type === 'CEMENT' ? 'Цемент со склада' : d.sale_type === 'TICKET' ? 'Цемент из тикета' : d.sale_type === 'DIRECT' ? 'Напрямую от поставщика' : 'Логистика');
   add('Клиент', names.client_id);
+  if (d.sale_type === 'TICKET') add('Тикет', names.ticket_id);
   if (d.sale_type !== 'LOGISTICS') {
     add('Поставщик', names.zavod_id);
     add('Завод', names.factory_id);
@@ -24,7 +25,7 @@ export function summaryOf(d: Data, names: Record<string, string>): string {
     add('Упаковка', PACKAGING_LABELS[String(d.packaging)]);
   }
   add('Тоннаж', d.tonnage != null ? `${fmt(d.tonnage)} т` : null);
-  if (d.sale_type === 'CEMENT') add('Цена за тонну', d.price_per_ton != null ? `${fmt(d.price_per_ton)} сум` : null);
+  if (d.sale_type === 'CEMENT' || d.sale_type === 'TICKET') add('Цена за тонну', d.price_per_ton != null ? `${fmt(d.price_per_ton)} сум` : null);
   if (d.sale_type === 'DIRECT') {
     add('Цена закупки', d.price_per_ton != null ? `${fmt(d.price_per_ton)} сум` : null);
     add('Цена продажи', d.sale_price_per_ton != null ? `${fmt(d.sale_price_per_ton)} сум` : null);
@@ -43,7 +44,7 @@ export function summaryOf(d: Data, names: Record<string, string>): string {
 export function buildPayload(d: Data, ownNumber: string | null): { payload: Record<string, unknown> } | { error: string } {
   const payload: Record<string, unknown> = {
     date: todayTashkent(),
-    sale_type: d.sale_type,
+    sale_type: d.sale_type === 'TICKET' ? 'CEMENT' : d.sale_type,
     client_id: d.client_id,
     tonnage: d.tonnage,
     vehicle_type: d.vehicle_type,
@@ -64,6 +65,10 @@ export function buildPayload(d: Data, ownNumber: string | null): { payload: Reco
       packaging: d.packaging,
       price_per_ton: d.price_per_ton,
     });
+  }
+  if (d.sale_type === 'TICKET') {
+    // Продажа из тикета: завод, марка и упаковка берутся из самого тикета, поэтому здесь их нет.
+    Object.assign(payload, { source: 'ticket', ticket_id: d.ticket_id, factory_id: d.factory_id ?? null, price_per_ton: d.price_per_ton });
   }
   let check: { success: true } | { success: false; error: { issues: { message: string }[] } };
   if (d.sale_type === 'DIRECT') {

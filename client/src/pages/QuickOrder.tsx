@@ -2,14 +2,14 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError, buildQuery } from '@/api/client';
-import { cementMarksHooks, clientsHooks, factoriesHooks, machinesHooks, useSubmitQuickOrder, useSuggestions, zavodyHooks } from '@/api/modules';
+import { cementMarksHooks, clientsHooks, factoriesHooks, machinesHooks, ticketsHooks, useSubmitQuickOrder, useSuggestions, zavodyHooks } from '@/api/modules';
 import { ButtonGroup } from '@/components/ButtonGroup';
 import { PlainSelect } from '@/components/form';
 import { PageHeader } from '@/components/PageHeader';
 import { SuggestInput } from '@/components/SuggestInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { PACKAGING_OPTIONS } from '@/lib/constants';
+import { PACKAGING_LABELS, PACKAGING_OPTIONS } from '@/lib/constants';
 import { formatMoney, formatNumber } from '@/lib/format';
 import { useToast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
@@ -20,12 +20,14 @@ type Opt = { value: string; label: string };
 
 const TYPE_OPTIONS: Opt[] = [
   { value: 'CEMENT', label: 'Со склада' },
+  { value: 'TICKET', label: 'Из тикета' },
   { value: 'DIRECT', label: 'Напрямую' },
   { value: 'LOGISTICS', label: 'Логистика' },
 ];
 
 const DRAFT_KEY = 'quickOrder.draft';
 const RECENT_KEY = 'quickOrder.recentClients';
+const typeButtons = 'w-full !grid grid-cols-2 [&>button]:h-12 [&>button]:text-base';
 const wide = 'w-full flex-nowrap [&>button]:h-12 [&>button]:flex-1 [&>button]:px-2 [&>button]:text-base [&>button]:whitespace-nowrap';
 
 function load<T>(key: string, fallback: T): T {
@@ -106,6 +108,7 @@ export function QuickOrder() {
   const marks = cementMarksHooks.useList();
   const machines = machinesHooks.useList();
   const suggestions = useSuggestions();
+  const tickets = ticketsHooks.useList({ status: 'active' });
 
   const [f, setF] = useState<Form>(() => load<Form>(DRAFT_KEY, { sale_type: 'CEMENT', vehicle_type: 'CLIENT' }));
   const [recent, setRecent] = useState<string[]>(() => load<string[]>(RECENT_KEY, []));
@@ -118,7 +121,10 @@ export function QuickOrder() {
   useEffect(() => save(DRAFT_KEY, f), [f]);
 
   const type = f.sale_type ?? 'CEMENT';
-  const isCement = type !== 'LOGISTICS';
+  const isTicket = type === 'TICKET';
+  const isCement = type === 'CEMENT' || type === 'DIRECT';
+  const sellsCement = type !== 'LOGISTICS';
+  const selectedTicket = isTicket ? (tickets.data ?? []).find((x) => String(x.id) === f.ticket_id) : undefined;
   const vehicle = f.vehicle_type ?? 'CLIENT';
   const opts = (rows: { id: number; name?: string; number?: string }[] | undefined): Opt[] =>
     (rows ?? []).map((r) => ({ value: String(r.id), label: r.name ?? r.number ?? '' }));
@@ -143,22 +149,28 @@ export function QuickOrder() {
   const clientSales = useQuery({
     queryKey: ['quick-client-sales', f.client_id],
     queryFn: () => api.get<Sale[]>(`/sales${buildQuery({ client_id: f.client_id })}`),
-    enabled: Boolean(f.client_id) && type === 'CEMENT',
+    enabled: Boolean(f.client_id) && (type === 'CEMENT' || isTicket),
     staleTime: 60_000,
   });
   const lastPrice = useMemo(() => {
     const cement = (clientSales.data ?? []).filter((s) => s.sale_type === 'CEMENT' && Number(s.price_per_ton) > 0);
-    const sameMark = cement.find((s) => String(s.cement_mark_id) === f.cement_mark_id);
+    const markId = isTicket ? String(selectedTicket?.cement_mark_id ?? '') : f.cement_mark_id;
+    const sameMark = cement.find((s) => String(s.cement_mark_id) === markId);
     return Number((sameMark ?? cement[0])?.price_per_ton ?? 0) || null;
-  }, [clientSales.data, f.cement_mark_id]);
+  }, [clientSales.data, f.cement_mark_id, isTicket, selectedTicket?.cement_mark_id]);
   const autofilled = useRef('');
   useEffect(() => {
-    const key = `${f.client_id}|${f.cement_mark_id}`;
-    if (type === 'CEMENT' && lastPrice && !f.price_per_ton && autofilled.current !== key) {
+    const key = `${f.client_id}|${f.cement_mark_id}|${f.ticket_id}`;
+    if ((type === 'CEMENT' || isTicket) && lastPrice && !f.price_per_ton && autofilled.current !== key) {
       autofilled.current = key;
       setF((p) => ({ ...p, price_per_ton: String(Math.round(lastPrice)) }));
     }
-  }, [lastPrice, type, f.client_id, f.cement_mark_id, f.price_per_ton]);
+  }, [lastPrice, type, isTicket, f.client_id, f.cement_mark_id, f.ticket_id, f.price_per_ton]);
+
+  // Завод у тикета обычно уже записан — подставляем; у старых тикетов его нет, тогда менеджер выбирает сам.
+  useEffect(() => {
+    if (selectedTicket) setF((p) => (p.factory_id === String(selectedTicket.factory_id ?? '') ? p : { ...p, factory_id: String(selectedTicket.factory_id ?? '') }));
+  }, [selectedTicket?.id, selectedTicket?.factory_id]);
 
   function changeType(v: string) {
     // У логистики не бывает «машины клиента».
@@ -174,9 +186,11 @@ export function QuickOrder() {
   // Что обязательно для выбранного типа — по тем же правилам, что и на сервере.
   function required(): [string, string][] {
     const r: [string, string][] = [['client_id', 'Клиент']];
+    if (isTicket) r.push(['ticket_id', 'Тикет']);
+    if (isTicket && selectedTicket && !selectedTicket.factory_id) r.push(['factory_id', 'Завод']);
     if (isCement) r.push(['zavod_id', 'Поставщик'], ['factory_id', 'Завод'], ['cement_mark_id', 'Марка'], ['packaging', 'Упаковка']);
     r.push(['tonnage', 'Тоннаж']);
-    if (type === 'CEMENT') r.push(['price_per_ton', 'Цена продажи']);
+    if (type === 'CEMENT' || isTicket) r.push(['price_per_ton', 'Цена продажи']);
     if (type === 'DIRECT') r.push(['price_per_ton', 'Цена закупки'], ['sale_price_per_ton', 'Цена продажи']);
     if (vehicle === 'OWN') r.push(['own_vehicle_id', 'Своя машина'], ['freight_price_per_ton', 'Цена перевозки']);
     if (vehicle === 'CLIENT') r.push(['machine_number', 'Номер машины']);
@@ -187,9 +201,11 @@ export function QuickOrder() {
   const t = toNum(f.tonnage);
   const freightTotal = vehicle === 'CLIENT' ? 0 : t * toNum(f.freight_price_per_ton);
   const total =
-    type === 'CEMENT' ? t * toNum(f.price_per_ton) + freightTotal : type === 'DIRECT' ? t * toNum(f.sale_price_per_ton) + freightTotal : freightTotal;
+    type === 'CEMENT' || isTicket ? t * toNum(f.price_per_ton) + freightTotal : type === 'DIRECT' ? t * toNum(f.sale_price_per_ton) + freightTotal : freightTotal;
   const margin =
-    type === 'DIRECT'
+    isTicket && selectedTicket
+      ? t * (toNum(f.price_per_ton) - Number(selectedTicket.price_per_ton))
+      : type === 'DIRECT'
       ? t * (toNum(f.sale_price_per_ton) - toNum(f.price_per_ton))
       : type === 'LOGISTICS' && vehicle === 'HIRED'
         ? t * (toNum(f.freight_price_per_ton) - toNum(f.hire_price_per_ton))
@@ -215,6 +231,7 @@ export function QuickOrder() {
       freight_price_per_ton: n('freight_price_per_ton'),
       hire_price_per_ton: n('hire_price_per_ton'),
     };
+    if (isTicket) Object.assign(body, { ticket_id: n('ticket_id'), factory_id: n('factory_id'), price_per_ton: n('price_per_ton') });
     if (isCement) {
       Object.assign(body, {
         zavod_id: n('zavod_id'),
@@ -239,6 +256,7 @@ export function QuickOrder() {
         factory_id: f.factory_id ?? '',
         cement_mark_id: f.cement_mark_id ?? '',
         packaging: f.packaging ?? '',
+        ticket_id: f.ticket_id ?? '',
       });
       autofilled.current = '';
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -261,7 +279,7 @@ export function QuickOrder() {
   );
 
   const priceHint =
-    type === 'CEMENT' && lastPrice && Math.round(lastPrice) !== toNum(f.price_per_ton) ? (
+    (type === 'CEMENT' || isTicket) && lastPrice && Math.round(lastPrice) !== toNum(f.price_per_ton) ? (
       <button type="button" onClick={() => set('price_per_ton')(String(Math.round(lastPrice)))} className="text-xs text-primary">
         В прошлый раз этому клиенту: {formatMoney(lastPrice)} — нажмите, чтобы подставить
       </button>
@@ -280,7 +298,7 @@ export function QuickOrder() {
         </div>
       )}
 
-      <ButtonGroup value={type} onChange={changeType} options={TYPE_OPTIONS} className={wide} />
+      <ButtonGroup value={type} onChange={changeType} options={TYPE_OPTIONS} className={typeButtons} />
 
       <Section title="Кому">
         {recentClients.length > 0 && (
@@ -304,6 +322,35 @@ export function QuickOrder() {
           <PlainSelect value={f.client_id ?? ''} onValueChange={set('client_id')} options={opts(clients.data)} placeholder="Найти клиента…" className="h-12 w-full text-base" />
         </Field>
       </Section>
+
+      {isTicket && (
+        <Section title="Тикет">
+          <Field label="Выберите тикет" invalid={errors.has('ticket_id')}>
+            <Pick
+              value={f.ticket_id ?? ''}
+              onChange={set('ticket_id')}
+              options={(tickets.data ?? []).map((x) => ({
+                value: String(x.id),
+                label: `№${x.ticket_number} · ${x.cement_mark_name} · ${formatNumber(x.remaining_tonnage, 1)} т`,
+              }))}
+              placeholder="Выберите тикет"
+              maxChips={8}
+            />
+          </Field>
+          {selectedTicket && (
+            <p className="text-sm text-muted-foreground">
+              {selectedTicket.zavod_name} · {PACKAGING_LABELS[selectedTicket.packaging]} · остаток {formatNumber(selectedTicket.remaining_tonnage, 3)} т · цена покупки{' '}
+              {formatMoney(selectedTicket.price_per_ton)}/т
+            </p>
+          )}
+          {selectedTicket && !selectedTicket.factory_id && (
+            <Field label="Завод (у тикета не указан)" invalid={errors.has('factory_id')}>
+              <Pick value={f.factory_id ?? ''} onChange={set('factory_id')} options={opts(factories.data)} placeholder="Выберите завод" />
+            </Field>
+          )}
+          {(tickets.data ?? []).length === 0 && <p className="text-sm text-muted-foreground">Активных тикетов нет.</p>}
+        </Section>
+      )}
 
       {isCement && (
         <Section title="Цемент">
@@ -333,7 +380,7 @@ export function QuickOrder() {
             placeholder="0"
           />
         </Field>
-        {type === 'CEMENT' && money('price_per_ton', 'Цена продажи за тонну, сум', priceHint)}
+        {(type === 'CEMENT' || isTicket) && money('price_per_ton', 'Цена продажи за тонну, сум', priceHint)}
         {type === 'DIRECT' && (
           <>
             {money('price_per_ton', 'Цена закупки у поставщика за тонну, сум')}
@@ -346,7 +393,7 @@ export function QuickOrder() {
         <ButtonGroup
           value={vehicle}
           onChange={set('vehicle_type')}
-          options={[...(isCement ? [{ value: 'CLIENT', label: 'Клиента' }] : []), { value: 'OWN', label: 'Своя' }, { value: 'HIRED', label: 'Наёмная' }]}
+          options={[...(sellsCement ? [{ value: 'CLIENT', label: 'Клиента' }] : []), { value: 'OWN', label: 'Своя' }, { value: 'HIRED', label: 'Наёмная' }]}
           className={wide}
         />
         {vehicle === 'OWN' && (

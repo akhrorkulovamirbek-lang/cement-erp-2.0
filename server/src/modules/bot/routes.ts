@@ -42,7 +42,7 @@ botRouter.post(
   requirePermission('sales'),
   asyncHandler(async (req, res) => {
     const d = req.body as Data;
-    if (!['CEMENT', 'DIRECT', 'LOGISTICS'].includes(String(d.sale_type))) throw badRequest('Выберите тип заявки');
+    if (!['CEMENT', 'TICKET', 'DIRECT', 'LOGISTICS'].includes(String(d.sale_type))) throw badRequest('Выберите тип заявки');
     const names: Record<string, string> = {};
     const lookup = async (field: string, table: string, col: string) => {
       if (!d[field]) return;
@@ -55,6 +55,7 @@ botRouter.post(
       lookup('factory_id', 'factories', 'name'),
       lookup('cement_mark_id', 'cement_marks', 'name'),
       lookup('own_vehicle_id', 'machines', 'number'),
+      lookup('ticket_id', 'tickets', 'ticket_number'),
     ]);
     const clean: Data = { ...d, machine_number: d.machine_number ? String(d.machine_number).replace(/\s+/g, '').toUpperCase() : null };
     const built = buildPayload(clean, names.own_vehicle_id ?? null);
