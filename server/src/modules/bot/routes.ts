@@ -205,38 +205,39 @@ botRouter.delete(
   }),
 );
 
-// ---- Клиенты бота: коды доступа к своему отчёту ----
+// ---- Клиенты бота: у каждого клиента свой постоянный код ----
 
 botRouter.get(
   '/client-links',
   requirePermission('settings'),
   asyncHandler(async (_req, res) => {
     const { rows } = await pool.query(
-      `SELECT l.id, l.client_id, c.name AS client_name, l.link_code, l.telegram_id IS NOT NULL AS linked
-       FROM bot_client_links l JOIN clients c ON c.id = l.client_id ORDER BY c.name, l.id`,
+      `SELECT c.id AS client_id, c.name AS client_name, c.bot_code,
+              (SELECT COUNT(*)::int FROM bot_client_links l WHERE l.client_id = c.id AND l.telegram_id IS NOT NULL) AS linked_count
+       FROM clients c ORDER BY c.name`,
     );
     res.json(rows);
   }),
 );
 
+// Новый код: старый перестаёт работать для новых подключений (уже подключённые остаются).
 botRouter.post(
-  '/client-links',
+  '/client-links/:clientId/regenerate',
   requirePermission('settings'),
   asyncHandler(async (req, res) => {
-    const { client_id } = z.object({ client_id: z.coerce.number().int().positive('Выберите клиента') }).parse(req.body);
-    const { rows: c } = await pool.query('SELECT 1 FROM clients WHERE id = $1', [client_id]);
-    if (!c[0]) throw notFound('Клиент не найден');
-    const code = crypto.randomBytes(4).toString('hex').toUpperCase();
-    const { rows } = await pool.query('INSERT INTO bot_client_links (client_id, link_code) VALUES ($1, $2) RETURNING id, link_code', [client_id, code]);
-    res.status(201).json(rows[0]);
+    const code = crypto.randomBytes(5).toString('hex').toUpperCase();
+    const { rows } = await pool.query('UPDATE clients SET bot_code = $1 WHERE id = $2 RETURNING bot_code', [code, Number(req.params.clientId)]);
+    if (!rows[0]) throw notFound('Клиент не найден');
+    res.json(rows[0]);
   }),
 );
 
+// Отключить всех, кто подключился от имени этого клиента.
 botRouter.delete(
-  '/client-links/:id',
+  '/client-links/:clientId/people',
   requirePermission('settings'),
   asyncHandler(async (req, res) => {
-    await pool.query('DELETE FROM bot_client_links WHERE id = $1', [Number(req.params.id)]);
+    await pool.query('DELETE FROM bot_client_links WHERE client_id = $1', [Number(req.params.clientId)]);
     res.status(204).end();
   }),
 );

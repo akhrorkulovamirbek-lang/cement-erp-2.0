@@ -321,13 +321,15 @@ async function route(ctx: Ctx, update: IncomingUpdate, telegramId: number): Prom
         await menu(ctx, rows[0].name);
         return;
       }
-      const { rows: linked } = await pool.query(
-        `UPDATE bot_client_links l SET telegram_id = $1, link_code = NULL FROM clients c
-         WHERE l.link_code = $2 AND l.telegram_id IS NULL AND c.id = l.client_id RETURNING l.id, l.client_id, c.name`,
-        [telegramId, code],
-      );
-      if (linked[0]) {
-        await handleClientUpdate(token, chatId, linked[0] as ClientLink, '', '');
+      // Постоянный код клиента: им могут пользоваться несколько его сотрудников.
+      const { rows: clientRows } = await pool.query('SELECT id, name FROM clients WHERE bot_code = $1', [code]);
+      if (clientRows[0]) {
+        await pool.query(
+          `INSERT INTO bot_client_links (client_id, telegram_id) VALUES ($1, $2)
+           ON CONFLICT (telegram_id) DO UPDATE SET client_id = EXCLUDED.client_id`,
+          [clientRows[0].id, telegramId],
+        );
+        await handleClientUpdate(token, chatId, { id: 0, client_id: clientRows[0].id, name: clientRows[0].name }, '', '');
         return;
       }
     }

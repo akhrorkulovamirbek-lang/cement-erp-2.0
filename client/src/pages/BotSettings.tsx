@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { ApiError } from '@/api/client';
-import { clientsHooks, useAddBotClientLink, useBotClientLinks, useDeleteBotClientLink, useAddBotManager, useBotConfig, useBotManagers, useDeleteBotManager, useRemoveBot, useSaveBotToken } from '@/api/modules';
+import { useBotClientLinks, useDisconnectBotClient, useRegenerateBotCode, useAddBotManager, useBotConfig, useBotManagers, useDeleteBotManager, useRemoveBot, useSaveBotToken } from '@/api/modules';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/ui/button';
-import { PlainSelect } from '@/components/form';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/lib/toast';
@@ -17,11 +16,10 @@ export function BotSettings() {
   const removeBot = useRemoveBot();
   const addManager = useAddBotManager();
   const delManager = useDeleteBotManager();
-  const clients = clientsHooks.useList();
   const links = useBotClientLinks();
-  const addLink = useAddBotClientLink();
-  const delLink = useDeleteBotClientLink();
-  const [clientId, setClientId] = useState('');
+  const regenerate = useRegenerateBotCode();
+  const disconnect = useDisconnectBotClient();
+  const [clientSearch, setClientSearch] = useState('');
   const [token, setToken] = useState('');
   const [name, setName] = useState('');
 
@@ -115,46 +113,36 @@ export function BotSettings() {
         <CardContent className="space-y-3">
           <h3 className="font-semibold">3. Клиенты</h3>
           <p className="text-sm text-muted-foreground">
-            Клиент может сам смотреть в боте свой баланс, покупки и платежи. Выберите клиента — система выдаст код. Передайте код клиенту: он открывает бота{username ? ` @${username}` : ''} и отправляет его.
-            Клиент видит только свои данные, закупочных цен и маржи ему не показывается. Одному клиенту можно выдать несколько кодов (для разных сотрудников).
+            У каждого клиента уже есть свой постоянный код. Передайте его клиенту: он открывает бота{username ? ` @${username}` : ''} и отправляет код — после этого видит свой баланс и может получить выписку в Excel.
+            По одному коду могут подключиться несколько сотрудников клиента. Клиент видит только свои данные. Если код попал не к тому человеку — нажмите «Новый код», а лишних людей отключите.
           </p>
-          <div className="flex gap-2">
-            <PlainSelect
-              value={clientId}
-              onValueChange={setClientId}
-              placeholder="Выберите клиента"
-              className="min-w-0 flex-1"
-              options={(clients.data ?? []).map((c) => ({ value: String(c.id), label: c.name }))}
-            />
-            <Button
-              disabled={addLink.isPending || !clientId}
-              onClick={() =>
-                addLink
-                  .mutateAsync(Number(clientId))
-                  .then(() => setClientId(''))
-                  .catch(err)
-              }
-            >
-              Создать код
-            </Button>
-          </div>
-          <div className="space-y-2">
-            {(links.data ?? []).map((l) => (
-              <div key={l.id} className="flex flex-wrap items-center gap-3 rounded-md border p-3 text-sm">
-                <span className="font-medium">{l.client_name}</span>
-                {l.linked ? (
-                  <Badge tone="green">Подключён</Badge>
-                ) : (
-                  <span>
-                    Код: <b className="font-mono tracking-wider">{l.link_code}</b>
-                  </span>
-                )}
-                <Button variant="outline" size="sm" className="ml-auto" onClick={() => delLink.mutateAsync(l.id).catch(err)}>
-                  {l.linked ? 'Отключить' : 'Удалить'}
-                </Button>
-              </div>
-            ))}
-            {(links.data ?? []).length === 0 && <p className="text-sm text-muted-foreground">Клиентов в боте пока нет.</p>}
+          <Input value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} placeholder="Найти клиента…" />
+          <div className="max-h-[28rem] space-y-2 overflow-y-auto">
+            {(links.data ?? [])
+              .filter((l) => l.client_name.toLowerCase().includes(clientSearch.trim().toLowerCase()))
+              .map((l) => (
+                <div key={l.client_id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border p-3 text-sm">
+                  <span className="min-w-0 flex-1 font-medium">{l.client_name}</span>
+                  <button
+                    type="button"
+                    title="Нажмите, чтобы скопировать"
+                    className="rounded bg-muted px-2 py-1 font-mono tracking-wider hover:bg-muted/70"
+                    onClick={() => navigator.clipboard?.writeText(l.bot_code).then(() => notify('Код скопирован'))}
+                  >
+                    {l.bot_code}
+                  </button>
+                  {l.linked_count > 0 && <Badge tone="green">Подключено: {l.linked_count}</Badge>}
+                  <Button variant="outline" size="sm" onClick={() => regenerate.mutateAsync(l.client_id).then(() => notify('Код заменён')).catch(err)}>
+                    Новый код
+                  </Button>
+                  {l.linked_count > 0 && (
+                    <Button variant="outline" size="sm" onClick={() => disconnect.mutateAsync(l.client_id).then(() => notify('Все отключены')).catch(err)}>
+                      Отключить всех
+                    </Button>
+                  )}
+                </div>
+              ))}
+            {(links.data ?? []).length === 0 && <p className="text-sm text-muted-foreground">Клиентов пока нет.</p>}
           </div>
         </CardContent>
       </Card>
