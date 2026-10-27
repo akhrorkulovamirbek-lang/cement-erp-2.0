@@ -493,7 +493,7 @@ export function ClientDetail() {
       </Link>
       <PageHeader
         title={client?.name ?? '...'}
-        subtitle={client?.phone ?? undefined}
+        subtitle={[client?.phone, client?.telegram_username ? `Телеграм: @${client.telegram_username}` : null].filter(Boolean).join(' · ') || undefined}
         action={
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
             <Button variant="outline" onClick={openAdjust}>

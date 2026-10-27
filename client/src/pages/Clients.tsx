@@ -143,6 +143,7 @@ export function Clients() {
       ),
     },
     { key: 'phone', header: 'Телефон', render: (r) => r.phone || '—' },
+    { key: 'telegram_username', header: 'Телеграм', sortValue: (r) => r.telegram_username ?? '', render: (r) => (r.telegram_username ? `@${r.telegram_username}` : '—') },
     {
       key: 'purchased',
       header: 'Куплено',
