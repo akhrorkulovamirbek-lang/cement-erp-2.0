@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BrokerTab, CashFlowTab, DealMarginsTab, MachinesTab, PnlTab, StockTab } from './ReportsFinancial';
+import { ArrowRight, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
   useCashServiceSummary,
@@ -28,14 +28,22 @@ export function Reports() {
   return (
     <div>
       <PageHeader title="Отчёты" subtitle="Цемент, логистика, клиенты, поставщики и обналичивание — в одном месте" />
-      <Tabs defaultValue="pnl">
-        <TabsList className="h-auto w-full flex-wrap justify-start">
-          <TabsTrigger value="pnl">Прибыли и убытки</TabsTrigger>
-          <TabsTrigger value="deals">Маржа по сделкам</TabsTrigger>
-          <TabsTrigger value="cashflow">Движение денег</TabsTrigger>
-          <TabsTrigger value="broker">Брокерский счёт</TabsTrigger>
-          <TabsTrigger value="stock">Остатки</TabsTrigger>
-          <TabsTrigger value="machines">Машины и рейсы</TabsTrigger>
+      <Link
+        to="/reports/finance"
+        className="mb-5 flex items-center gap-4 rounded-xl border bg-card p-4 transition-colors hover:bg-muted/50"
+      >
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <TrendingUp className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">Финансовые отчёты</span>
+          <span className="block text-sm text-muted-foreground">Прибыли и убытки, маржа по сделкам, движение денег, брокерский счёт, остатки, прибыль по машинам — с графиками</span>
+        </span>
+        <ArrowRight className="size-5 shrink-0 text-muted-foreground" />
+      </Link>
+
+      <Tabs defaultValue="cement">
+        <TabsList className="flex-wrap">
           <TabsTrigger value="cement">Цемент</TabsTrigger>
           <TabsTrigger value="vehicles">Логистика</TabsTrigger>
           <TabsTrigger value="clients">Клиенты</TabsTrigger>
@@ -44,24 +52,6 @@ export function Reports() {
           <TabsTrigger value="cash-service">Обналичивание</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="pnl" className="mt-4">
-          <PnlTab />
-        </TabsContent>
-        <TabsContent value="deals" className="mt-4">
-          <DealMarginsTab />
-        </TabsContent>
-        <TabsContent value="cashflow" className="mt-4">
-          <CashFlowTab />
-        </TabsContent>
-        <TabsContent value="broker" className="mt-4">
-          <BrokerTab />
-        </TabsContent>
-        <TabsContent value="stock" className="mt-4">
-          <StockTab />
-        </TabsContent>
-        <TabsContent value="machines" className="mt-4">
-          <MachinesTab />
-        </TabsContent>
         <TabsContent value="cement" className="mt-4">
           <CementTab />
         </TabsContent>
