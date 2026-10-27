@@ -146,7 +146,7 @@ export async function buildClientWorkbook(
   clientId: number,
   clientName: string,
   range: { from: string | null; to: string | null; label: string },
-): Promise<Buffer> {
+): Promise<{ file: Buffer; purchased: number; paid: number; debt: number }> {
   const { initial, events: all } = await loadEvents(clientId);
   const delta = (e: Event) => (e.charged ?? 0) - (e.paid ?? 0);
 
@@ -285,5 +285,5 @@ export async function buildClientWorkbook(
     cell.alignment = { horizontal: 'center' };
   });
 
-  return Buffer.from(await wb.xlsx.writeBuffer());
+  return { file: Buffer.from(await wb.xlsx.writeBuffer()), purchased, paid, debt: currentDebt };
 }
