@@ -67,7 +67,8 @@ export function ZavodDetail() {
         tonnage: r.tonnage,
         pricePerTon: r.price_per_ton,
         totalSum: r.total_sum,
-        machine: r.machine_number ?? '',
+        // У прямой продажи номер машины хранится в связанной продаже — берём ту же машину, что показывает Приход.
+        machine: r.machine_display ?? r.machine_number ?? '',
       }),
     ),
     ...(tickets.data ?? []).map(
