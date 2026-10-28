@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { useDecideRequest, useSaleRequests, type SaleRequest } from '@/api/modules';
+import { useDecideRequest, useSaleRequests, useUpdateSaleRequest, type SaleRequest } from '@/api/modules';
 import { ApiError } from '@/api/client';
 import { Badge } from '@/components/Badge';
 import { PageHeader } from '@/components/PageHeader';
+import { SidePanel } from '@/components/SidePanel';
+import { QuickOrderForm } from './QuickOrder';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,6 +20,8 @@ export function BotRequests() {
   const { notify } = useToast();
   const list = useSaleRequests();
   const decide = useDecideRequest();
+  const updateRequest = useUpdateSaleRequest();
+  const [editing, setEditing] = useState<SaleRequest | null>(null);
   const [rejecting, setRejecting] = useState<number | null>(null);
   const [reason, setReason] = useState('');
 
@@ -33,6 +37,17 @@ export function BotRequests() {
       notify(err instanceof ApiError ? err.message : 'Ошибка', 'error');
     }
   }
+  async function saveEdit(body: Record<string, unknown>) {
+    if (!editing) return;
+    try {
+      const r = await updateRequest.mutateAsync({ id: editing.id, data: body });
+      notify(r.incomplete ? `Заявка №${editing.id} сохранена, но ещё есть что дописать` : `Заявка №${editing.id} сохранена — можно подтверждать`);
+      setEditing(null);
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : 'Ошибка', 'error');
+    }
+  }
+
   async function reject(r: SaleRequest) {
     try {
       await decide.mutateAsync({ id: r.id, approve: false, reason });
@@ -61,6 +76,11 @@ export function BotRequests() {
                 </span>
               </div>
               <pre className="font-sans text-sm whitespace-pre-wrap">{r.summary}</pre>
+              {r.problems && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-sm">
+                  <b>Заявка неполная.</b> Нужно дописать — {r.problems}. Нажмите «Изменить», допишите и подтвердите.
+                </div>
+              )}
               {rejecting === r.id ? (
                 <div className="flex flex-wrap gap-2">
                   <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Причина (менеджер увидит её в боте)" className="min-w-0 flex-1" />
@@ -72,9 +92,12 @@ export function BotRequests() {
                   </Button>
                 </div>
               ) : (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button onClick={() => approve(r)} disabled={decide.isPending}>
                     Подтвердить
+                  </Button>
+                  <Button variant="outline" onClick={() => setEditing(r)}>
+                    Изменить
                   </Button>
                   <Button variant="outline" onClick={() => setRejecting(r.id)}>
                     Отклонить
@@ -102,6 +125,22 @@ export function BotRequests() {
           </div>
         </>
       )}
+
+      {editing && (
+        <SidePanel title={`Изменить заявку №${editing.id}`} onClose={() => setEditing(null)} widthClass="sm:max-w-xl">
+          <p className="mb-4 text-sm text-muted-foreground">
+            От: {editing.manager_name}. Исправьте ошибки и допишите недостающее, затем сохраните и подтвердите заявку.
+          </p>
+          <QuickOrderForm embedded initial={formToStrings(editing.form)} onSave={saveEdit} />
+        </SidePanel>
+      )}
     </div>
   );
+}
+
+/** Ответы из заявки → значения полей формы (всё — строками, как в форме). */
+function formToStrings(form: Record<string, unknown> | null): Record<string, string> {
+  const out: Record<string, string> = { sale_type: 'CEMENT', vehicle_type: 'CLIENT' };
+  for (const [k, v] of Object.entries(form ?? {})) if (v !== null && v !== undefined && v !== '') out[k] = String(v);
+  return out;
 }

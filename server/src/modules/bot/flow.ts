@@ -195,8 +195,8 @@ async function submit(ctx: Ctx, telegramId: number, manager: { id: number; name:
   }
   const payload = built.payload;
   const { rows } = await pool.query(
-    `INSERT INTO sale_requests (manager_id, manager_name, payload, summary) VALUES ($1, $2, $3, $4) RETURNING id`,
-    [manager.id, manager.name, JSON.stringify({ ...payload, _names: state.names }), summaryText(state)],
+    `INSERT INTO sale_requests (manager_id, manager_name, payload, summary, form) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+    [manager.id, manager.name, JSON.stringify({ ...payload, _names: state.names }), summaryText(state), JSON.stringify(state.data)],
   );
   await saveState(telegramId, null);
   await ctx.say(`Заявка №${rows[0].id} отправлена оператору:\n\n${summaryText(state)}\n\nКогда её подтвердят, я напишу сюда.`, [

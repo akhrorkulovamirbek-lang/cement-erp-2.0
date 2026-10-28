@@ -503,6 +503,8 @@ export interface SaleRequest {
   summary: string;
   status: 'pending' | 'approved' | 'rejected';
   reject_reason: string | null;
+  problems: string | null;
+  form: Record<string, unknown> | null;
   sale_id: number | null;
   created_at: string;
   decided_at: string | null;
@@ -521,6 +523,14 @@ export function useSaleRequests(status?: string, options: { enabled?: boolean } 
     queryFn: () => api.get<SaleRequest[]>(`/bot/requests${buildQuery({ status })}`),
     refetchInterval: 30_000,
     enabled: options.enabled ?? true,
+  });
+}
+
+export function useUpdateSaleRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { id: number; data: Record<string, unknown> }) => api.put<{ ok: boolean; incomplete: boolean }>(`/bot/requests/${p.id}`, p.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bot-requests'] }),
   });
 }
 

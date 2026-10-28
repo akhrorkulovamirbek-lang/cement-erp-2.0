@@ -536,3 +536,9 @@ CREATE TABLE IF NOT EXISTS bot_settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- Заявки: исходные ответы менеджера (form) хранятся отдельно от готовой продажи, чтобы заявку можно было подать
+-- неполной и доправить перед подтверждением. problems — чего не хватает.
+ALTER TABLE sale_requests ADD COLUMN IF NOT EXISTS form JSONB;
+ALTER TABLE sale_requests ADD COLUMN IF NOT EXISTS problems TEXT;
+ALTER TABLE sale_requests ALTER COLUMN payload DROP NOT NULL;

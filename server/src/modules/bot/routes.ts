@@ -11,7 +11,7 @@ import { saleSchema } from '../sales/schema.js';
 import { incomingSchema } from '../incoming/schema.js';
 import { createIncoming } from '../incoming/service.js';
 import { createSale } from '../sales/service.js';
-import { buildPayload, summaryOf, type Data } from './payload.js';
+import { buildPayload, payloadToForm, summaryOf, type Data } from './payload.js';
 import { notifySale } from './clientNotify.js';
 import { getSurveySettings, runDeliverySurvey, setSurveySetting } from './survey.js';
 import { notifyManager, tg } from './telegram.js';
@@ -34,41 +34,85 @@ botRouter.get(
       `SELECT * FROM sale_requests ${status ? 'WHERE status = $1' : ''} ORDER BY (status = 'pending') DESC, id DESC LIMIT 200`,
       status ? [status] : [],
     );
-    res.json(rows);
+    // У старых заявок сохранена только готовая продажа — восстанавливаем из неё форму для редактирования.
+    res.json(rows.map((r) => ({ ...r, form: r.form ?? (r.payload ? payloadToForm(r.payload) : null) })));
   }),
 );
 
-// Заявка из мобильной формы «Быстрая заявка» (то же, что делает бот, только с экрана телефона).
+/** Названия по выбранным в заявке справочникам — для краткого текста заявки. */
+async function namesFor(d: Data): Promise<Record<string, string>> {
+  const names: Record<string, string> = {};
+  const lookup = async (field: string, table: string, col: string) => {
+    if (!d[field]) return;
+    const { rows } = await pool.query(`SELECT ${col} AS label FROM ${table} WHERE id = $1`, [Number(d[field])]);
+    if (rows[0]) names[field] = String(rows[0].label);
+  };
+  await Promise.all([
+    lookup('client_id', 'clients', 'name'),
+    lookup('zavod_id', 'zavody', 'name'),
+    lookup('factory_id', 'factories', 'name'),
+    lookup('cement_mark_id', 'cement_marks', 'name'),
+    lookup('own_vehicle_id', 'machines', 'number'),
+    lookup('ticket_id', 'tickets', 'ticket_number'),
+  ]);
+  return names;
+}
+
+const cleanForm = (d: Data): Data => ({ ...d, machine_number: d.machine_number ? String(d.machine_number).replace(/\s+/g, '').toUpperCase() : null });
+const REQUEST_TYPES = ['CEMENT', 'TICKET', 'DIRECT', 'LOGISTICS'];
+
+/** Разбор заявки: названия, готовая продажа (если данных хватает) и список того, чего не хватает. Неполная заявка
+ * допустима — оператор доправит её перед подтверждением. */
+async function prepareRequest(d: Data, date?: string) {
+  const clean = cleanForm(d);
+  const names = await namesFor(clean);
+  const built = buildPayload(clean, names.own_vehicle_id ?? null, date);
+  const problems = 'error' in built ? built.errors.join('; ') : null;
+  return { clean, names, payload: 'payload' in built ? { ...built.payload, _names: names } : null, problems, summary: summaryOf(clean, names) };
+}
+
+const tashkentDate = (v: string | Date) => new Date(v).toLocaleDateString('en-CA', { timeZone: 'Asia/Tashkent' });
+
+// Заявка из мобильной формы «Быстрая заявка» (то же, что делает бот, только с экрана телефона). Можно отправить и
+// неполной: достаточно указать клиента или написать комментарий.
 botRouter.post(
   '/requests',
   requirePermission('sales'),
   asyncHandler(async (req, res) => {
     const d = req.body as Data;
-    if (!['CEMENT', 'TICKET', 'DIRECT', 'LOGISTICS'].includes(String(d.sale_type))) throw badRequest('Выберите тип заявки');
-    const names: Record<string, string> = {};
-    const lookup = async (field: string, table: string, col: string) => {
-      if (!d[field]) return;
-      const { rows } = await pool.query(`SELECT ${col} AS label FROM ${table} WHERE id = $1`, [Number(d[field])]);
-      if (rows[0]) names[field] = String(rows[0].label);
-    };
-    await Promise.all([
-      lookup('client_id', 'clients', 'name'),
-      lookup('zavod_id', 'zavody', 'name'),
-      lookup('factory_id', 'factories', 'name'),
-      lookup('cement_mark_id', 'cement_marks', 'name'),
-      lookup('own_vehicle_id', 'machines', 'number'),
-      lookup('ticket_id', 'tickets', 'ticket_number'),
-    ]);
-    const clean: Data = { ...d, machine_number: d.machine_number ? String(d.machine_number).replace(/\s+/g, '').toUpperCase() : null };
-    const built = buildPayload(clean, names.own_vehicle_id ?? null);
-    if ('error' in built) throw badRequest(built.error);
-    const who = req.user!.username;
+    if (!REQUEST_TYPES.includes(String(d.sale_type))) throw badRequest('Выберите тип заявки');
+    if (!d.client_id && !String(d.comment ?? '').trim()) throw badRequest('Укажите хотя бы клиента или напишите комментарий — иначе оператор не поймёт, о чём заявка');
+    const p = await prepareRequest(d);
     const { rows: u } = await publicPool.query('SELECT full_name FROM users WHERE id = $1', [req.user!.userId]);
     const { rows } = await pool.query(
-      `INSERT INTO sale_requests (manager_name, payload, summary) VALUES ($1, $2, $3) RETURNING id`,
-      [u[0]?.full_name || who, JSON.stringify({ ...built.payload, _names: names }), summaryOf(clean, names)],
+      `INSERT INTO sale_requests (manager_name, payload, summary, form, problems) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [u[0]?.full_name || req.user!.username, p.payload ? JSON.stringify(p.payload) : null, p.summary, JSON.stringify(p.clean), p.problems],
     );
-    res.status(201).json({ id: rows[0].id });
+    res.status(201).json({ id: rows[0].id, incomplete: Boolean(p.problems) });
+  }),
+);
+
+// Оператор правит заявку перед подтверждением: исправляет ошибки и дописывает недостающее.
+botRouter.put(
+  '/requests/:id',
+  requirePermission('sales'),
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const d = req.body as Data;
+    if (!REQUEST_TYPES.includes(String(d.sale_type))) throw badRequest('Выберите тип заявки');
+    const { rows: ex } = await pool.query('SELECT status, created_at FROM sale_requests WHERE id = $1', [id]);
+    if (!ex[0]) throw notFound('Заявка не найдена');
+    if (ex[0].status !== 'pending') throw badRequest('Эта заявка уже обработана — изменить её нельзя');
+    const p = await prepareRequest(d, tashkentDate(ex[0].created_at));
+    await pool.query('UPDATE sale_requests SET payload = $1, summary = $2, form = $3, problems = $4 WHERE id = $5', [
+      p.payload ? JSON.stringify(p.payload) : null,
+      p.summary,
+      JSON.stringify(p.clean),
+      p.problems,
+      id,
+    ]);
+    await recordAudit({ userId: req.user!.userId, action: 'update', objectType: 'sale_request', objectId: id, objectLabel: `Заявка №${id} отредактирована оператором`, req });
+    res.json({ ok: true, incomplete: Boolean(p.problems) });
   }),
 );
 
@@ -82,20 +126,27 @@ botRouter.post(
       const request = rows[0];
       if (!request) throw notFound('Заявка не найдена');
       if (request.status !== 'pending') throw badRequest('Эта заявка уже обработана');
-      // Данные могли устареть (например, клиента удалили) — проверяем по тем же правилам, что и обычную продажу.
+      // Продажа собирается заново из текущих ответов: данные могли устареть (удалили клиента) или быть недописаны.
+      const form: Data = request.form ?? payloadToForm(request.payload ?? {});
+      const names = await namesFor(form);
+      const built = buildPayload(cleanForm(form), names.own_vehicle_id ?? null, tashkentDate(request.created_at));
+      if ('error' in built) throw badRequest(`Заявку нельзя подтвердить: ${built.errors.join('; ')}. Нажмите «Изменить», дополните и подтвердите снова.`);
+      const payload = built.payload;
       let sale: { id: number };
-      if (request.payload.warehouse === 'DIRECT') {
+      if (payload.warehouse === 'DIRECT') {
         // Прямая продажа: приход «Напрямую» + привязанная продажа клиенту, которая ждёт погрузки.
-        const incoming = await createIncoming(client, incomingSchema.parse(request.payload));
+        const incoming = await createIncoming(client, incomingSchema.parse(payload));
         await client.query('UPDATE sales SET awaiting_shipment = true WHERE id = $1', [incoming.linked_sale_id]);
         sale = { id: incoming.linked_sale_id };
       } else {
-        sale = await createSale(client, saleSchema.parse({ ...request.payload, awaiting_shipment: true }));
+        sale = await createSale(client, saleSchema.parse({ ...payload, awaiting_shipment: true }));
       }
-      await client.query(
-        `UPDATE sale_requests SET status = 'approved', sale_id = $1, decided_by = $2, decided_at = now() WHERE id = $3`,
-        [sale.id, req.user!.userId, id],
-      );
+      await client.query(`UPDATE sale_requests SET status = 'approved', sale_id = $1, decided_by = $2, decided_at = now(), payload = $3 WHERE id = $4`, [
+        sale.id,
+        req.user!.userId,
+        JSON.stringify({ ...payload, _names: names }),
+        id,
+      ]);
       return { request, sale };
     });
     await recordAudit({

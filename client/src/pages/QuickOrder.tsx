@@ -100,6 +100,20 @@ const toNum = (s: string | undefined) => (s ? Number(s.replace(/\s/g, '').replac
 /** «Быстрая заявка» — одна форма на весь экран телефона. Заявка уходит оператору на подтверждение
  * (то же, что делает Телеграм-бот), в продажи попадает только после его «Подтвердить». */
 export function QuickOrder() {
+  return <QuickOrderForm />;
+}
+
+/** Сама форма заявки. На странице «Быстрая заявка» её заполняет менеджер (embedded = false); в разделе «Заявки»
+ * оператор открывает ту же форму, чтобы исправить или дописать заявку перед подтверждением (embedded = true). */
+export function QuickOrderForm({
+  initial,
+  embedded = false,
+  onSave,
+}: {
+  initial?: Form;
+  embedded?: boolean;
+  onSave?: (body: Record<string, unknown>) => Promise<void>;
+}) {
   const { notify } = useToast();
   const submit = useSubmitQuickOrder();
   const clients = clientsHooks.useList();
@@ -110,7 +124,7 @@ export function QuickOrder() {
   const suggestions = useSuggestions();
   const tickets = ticketsHooks.useList({ status: 'active' });
 
-  const [f, setF] = useState<Form>(() => load<Form>(DRAFT_KEY, { sale_type: 'CEMENT', vehicle_type: 'CLIENT' }));
+  const [f, setF] = useState<Form>(() => initial ?? load<Form>(DRAFT_KEY, { sale_type: 'CEMENT', vehicle_type: 'CLIENT' }));
   const [recent, setRecent] = useState<string[]>(() => load<string[]>(RECENT_KEY, []));
   const [sentId, setSentId] = useState<number | null>(null);
   const [errors, setErrors] = useState<Set<string>>(new Set());
@@ -118,7 +132,9 @@ export function QuickOrder() {
     setF((p) => ({ ...p, [k]: v }));
     if (errors.has(k)) setErrors((p) => new Set([...p].filter((x) => x !== k)));
   };
-  useEffect(() => save(DRAFT_KEY, f), [f]);
+  useEffect(() => {
+    if (!embedded) save(DRAFT_KEY, f);
+  }, [f, embedded]);
 
   const type = f.sale_type ?? 'CEMENT';
   const isTicket = type === 'TICKET';
@@ -161,7 +177,7 @@ export function QuickOrder() {
   const autofilled = useRef('');
   useEffect(() => {
     const key = `${f.client_id}|${f.cement_mark_id}|${f.ticket_id}`;
-    if ((type === 'CEMENT' || isTicket) && lastPrice && !f.price_per_ton && autofilled.current !== key) {
+    if (!embedded && (type === 'CEMENT' || isTicket) && lastPrice && !f.price_per_ton && autofilled.current !== key) {
       autofilled.current = key;
       setF((p) => ({ ...p, price_per_ton: String(Math.round(lastPrice)) }));
     }
@@ -212,11 +228,18 @@ export function QuickOrder() {
         : null;
 
   async function onSend() {
-    const missing = required().filter(([k]) => !f[k] || (toNum(f[k]) === 0 && /tonnage|price/.test(k)));
-    if (missing.length > 0) {
-      setErrors(new Set(missing.map(([k]) => k)));
-      notify(`Не заполнено: ${missing.map(([, l]) => l).join(', ')}`, 'error');
-      return;
+    // Менеджер может отправить и неполную заявку — оператор допишет. Хоть что-то указать нужно: клиента или комментарий.
+    if (!onSave) {
+      if (!f.client_id && !f.comment?.trim()) {
+        setErrors(new Set(['client_id']));
+        notify('Укажите хотя бы клиента или напишите комментарий', 'error');
+        return;
+      }
+      const missing = required().filter(([k]) => !f[k] || (toNum(f[k]) === 0 && /tonnage|price/.test(k)));
+      if (missing.length > 0) {
+        setErrors(new Set(missing.map(([k]) => k)));
+        if (!window.confirm(`Не заполнено: ${missing.map(([, l]) => l).join(', ')}.\n\nОтправить заявку оператору как есть? Он сможет дописать недостающее.`)) return;
+      }
     }
     const n = (k: string) => (f[k] ? toNum(f[k]) : null);
     const body: Record<string, unknown> = {
@@ -243,6 +266,10 @@ export function QuickOrder() {
       });
     }
     try {
+      if (onSave) {
+        await onSave(body);
+        return;
+      }
       const r = await submit.mutateAsync(body);
       setSentId(r.id);
       const nextRecent = [f.client_id, ...recent.filter((x) => x !== f.client_id)].slice(0, 8);
@@ -286,10 +313,10 @@ export function QuickOrder() {
     ) : null;
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 pb-36 md:pb-6">
-      <PageHeader title="Быстрая заявка" subtitle="Заполните и отправьте оператору на подтверждение" />
+    <div className={embedded ? 'space-y-4 pb-2' : 'mx-auto max-w-lg space-y-4 pb-36 md:pb-6'}>
+      {!embedded && <PageHeader title="Быстрая заявка" subtitle="Заполните и отправьте оператору на подтверждение. Можно отправить и неполную — оператор допишет." />}
 
-      {sentId && (
+      {!embedded && sentId && (
         <div className="rounded-lg border border-emerald-600/40 bg-emerald-600/10 p-3 text-sm">
           Заявка №{sentId} отправлена оператору. Товар и машина остались — можно сразу оформить следующую.{' '}
           <Link to="/requests" className="text-primary hover:underline">
@@ -301,7 +328,7 @@ export function QuickOrder() {
       <ButtonGroup value={type} onChange={changeType} options={TYPE_OPTIONS} className={typeButtons} />
 
       <Section title="Кому">
-        {recentClients.length > 0 && (
+        {!embedded && recentClients.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {recentClients.map((c) => (
               <button
@@ -433,7 +460,13 @@ export function QuickOrder() {
         <Input value={f.comment ?? ''} onChange={(e) => set('comment')(e.target.value)} className="h-12 text-base" />
       </Field>
 
-      <div className="fixed inset-x-0 bottom-16 z-30 space-y-2 border-t bg-background p-3 md:static md:border-0 md:bg-transparent md:p-0">
+      <div
+        className={
+          embedded
+            ? 'sticky bottom-0 z-10 space-y-2 border-t bg-background py-3'
+            : 'fixed inset-x-0 bottom-16 z-30 space-y-2 border-t bg-background p-3 md:static md:border-0 md:bg-transparent md:p-0'
+        }
+      >
         {total > 0 && (
           <div className="flex items-baseline justify-between px-1 text-sm">
             <span className="text-muted-foreground">
@@ -446,7 +479,7 @@ export function QuickOrder() {
           </div>
         )}
         <Button className="h-12 w-full text-base" onClick={onSend} disabled={submit.isPending}>
-          {submit.isPending ? 'Отправляю…' : 'Отправить оператору'}
+          {submit.isPending ? 'Отправляю…' : embedded ? 'Сохранить изменения' : 'Отправить оператору'}
         </Button>
       </div>
     </div>
