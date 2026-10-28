@@ -8,6 +8,7 @@ import { Cash } from './pages/Cash';
 import { CashService } from './pages/CashService';
 import { ClientDetail } from './pages/ClientDetail';
 import { Counterparties } from './pages/Counterparties';
+import { DataHealth } from './pages/DataHealth';
 import { FinanceReports } from './pages/FinanceReports';
 import { Dashboard } from './pages/Dashboard';
 import { IncomingPage } from './pages/Incoming';
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="/quick" element={<RequirePermission resource="sales"><QuickOrder /></RequirePermission>} />
         <Route path="/cash" element={<RequirePermission resource="cash"><Cash /></RequirePermission>} />
         <Route path="/cash-service" element={<RequirePermission resource="cashService"><CashService /></RequirePermission>} />
+        <Route path="/reports/health" element={<RequirePermission resource="reports"><DataHealth /></RequirePermission>} />
         <Route path="/reports/finance" element={<RequirePermission resource="reports"><FinanceReports /></RequirePermission>} />
         <Route path="/reports/finance/:section" element={<RequirePermission resource="reports"><FinanceReports /></RequirePermission>} />
         <Route path="/reports" element={<RequirePermission resource="reports"><Reports /></RequirePermission>} />

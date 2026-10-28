@@ -730,3 +730,17 @@ export function usePackagingCheck(enabled: boolean) {
     enabled,
   });
 }
+
+// ---- Контроль данных ----
+export interface HealthCheck {
+  key: string;
+  title: string;
+  severity: 'high' | 'medium' | 'low';
+  why: string;
+  fix: string;
+  count: number;
+  items: { title: string; detail: string }[];
+}
+export function useDataHealth() {
+  return useQuery({ queryKey: ['data-health'], queryFn: () => api.get<{ checks: HealthCheck[]; generatedAt: string }>('/report/data-health'), staleTime: 0 });
+}

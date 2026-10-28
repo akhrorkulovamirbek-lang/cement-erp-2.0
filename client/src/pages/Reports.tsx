@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, TrendingUp } from 'lucide-react';
+import { ArrowRight, ShieldCheck, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
   useCashServiceSummary,
@@ -38,6 +38,19 @@ export function Reports() {
         <span className="min-w-0 flex-1">
           <span className="block font-semibold">Финансовые отчёты</span>
           <span className="block text-sm text-muted-foreground">Прибыли и убытки, маржа по сделкам, движение денег, брокерский счёт, остатки, прибыль по машинам — с графиками</span>
+        </span>
+        <ArrowRight className="size-5 shrink-0 text-muted-foreground" />
+      </Link>
+      <Link
+        to="/reports/health"
+        className="mb-5 flex items-center gap-4 rounded-xl border bg-card p-4 transition-colors hover:bg-muted/50"
+      >
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+          <ShieldCheck className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">Контроль данных</span>
+          <span className="block text-sm text-muted-foreground">Сама находит ошибки и пропуски в данных, из-за которых отчёты и карточки могут быть неверными</span>
         </span>
         <ArrowRight className="size-5 shrink-0 text-muted-foreground" />
       </Link>
