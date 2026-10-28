@@ -339,7 +339,7 @@ export function QuickOrder() {
           </Field>
           {selectedTicket && (
             <p className="text-sm text-muted-foreground">
-              {selectedTicket.zavod_name} · {PACKAGING_LABELS[selectedTicket.packaging]} · остаток {formatNumber(selectedTicket.remaining_tonnage, 3)} т · цена покупки{' '}
+              {selectedTicket.factory_name ?? selectedTicket.zavod_name} · {PACKAGING_LABELS[selectedTicket.packaging]} · остаток {formatNumber(selectedTicket.remaining_tonnage, 3)} т · цена покупки{' '}
               {formatMoney(selectedTicket.price_per_ton)}/т
             </p>
           )}

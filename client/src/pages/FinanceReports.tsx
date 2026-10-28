@@ -799,7 +799,7 @@ function StockSection() {
       ],
       columns: [
         { header: 'Где', width: 10 },
-        { header: 'Поставщик', width: 22 },
+        { header: 'Поставщик / завод', width: 22 },
         { header: 'Марка', width: 16 },
         { header: 'Упаковка', width: 12 },
         { header: 'Тикет', width: 12 },
@@ -892,7 +892,7 @@ function StockSection() {
       <DataTable
         columns={[
           { key: 'ticket_number', header: 'Тикет', sortValue: (r) => r.ticket_number },
-          { key: 'zavod_name', header: 'Поставщик', sortValue: (r) => r.zavod_name },
+          { key: 'zavod_name', header: 'Завод', sortValue: (r) => r.zavod_name },
           { key: 'mark', header: 'Марка', sortValue: (r) => r.mark },
           { key: 'packaging', header: 'Упаковка', render: (r) => packLabel(r.packaging) },
           { key: 'tonnage', header: 'Остаток, т', align: 'right', sortValue: (r) => r.tonnage, render: (r) => formatNumber(r.tonnage, 3) },

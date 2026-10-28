@@ -369,7 +369,6 @@ export function IncomingPage() {
           id: editingTicket.id,
           data: {
             ticket_number: data.ticket_number,
-            zavod_id: Number(data.zavod_id),
             factory_id: factoryValue(data.factory_id),
             cement_mark_id: Number(data.cement_mark_id),
             price_per_ton: Number(data.price_per_ton),
@@ -381,7 +380,6 @@ export function IncomingPage() {
         await createTicket.mutateAsync({
           date: data.date,
           ticket_number: data.ticket_number,
-          zavod_id: Number(data.zavod_id),
           factory_id: factoryValue(data.factory_id),
           cement_mark_id: Number(data.cement_mark_id),
           packaging: data.packaging,
@@ -423,7 +421,6 @@ export function IncomingPage() {
   const ticketColumns: Column<Ticket>[] = [
     { key: 'ticket_number', header: 'Номер', sortValue: (r) => r.ticket_number },
     { key: 'date', header: 'Дата', sortValue: (r) => r.date, render: (r) => formatDate(r.date) },
-    { key: 'zavod_name', header: 'Поставщик' },
     { key: 'factory_name', header: 'Завод', render: (r) => r.factory_name ?? '—' },
     { key: 'cement_mark_name', header: 'Марка' },
     { key: 'packaging', header: 'Упаковка', render: (r) => PACKAGING_LABELS[r.packaging] },
@@ -605,13 +602,6 @@ export function IncomingPage() {
               <FormRow label="Номер тикета" error={ticketForm.formState.errors.ticket_number?.message}>
                 <Input {...ticketForm.register('ticket_number', { required: 'Укажите номер' })} placeholder="Cesam-001" />
               </FormRow>
-              <FormRow label="Поставщик" error={ticketForm.formState.errors.zavod_id?.message}>
-                <RHFSelect
-                  control={ticketForm.control}
-                  name="zavod_id"
-                  options={(zavody.data ?? []).map((z) => ({ value: String(z.id), label: z.name }))}
-                />
-              </FormRow>
               <FormRow label="Завод">
                 <RHFSelect control={ticketForm.control} name="factory_id" options={factoryOptions} />
               </FormRow>
@@ -792,9 +782,6 @@ export function IncomingPage() {
           <form onSubmit={ticketForm.handleSubmit(onCreateOrEditTicket)} className="space-y-4">
             <FormRow label="Номер тикета" error={ticketForm.formState.errors.ticket_number?.message}>
               <Input {...ticketForm.register('ticket_number', { required: 'Укажите номер' })} />
-            </FormRow>
-            <FormRow label="Поставщик" error={ticketForm.formState.errors.zavod_id?.message}>
-              <RHFSelect control={ticketForm.control} name="zavod_id" options={(zavody.data ?? []).map((z) => ({ value: String(z.id), label: z.name }))} />
             </FormRow>
             <FormRow label="Завод">
               <RHFSelect control={ticketForm.control} name="factory_id" options={factoryOptions} />

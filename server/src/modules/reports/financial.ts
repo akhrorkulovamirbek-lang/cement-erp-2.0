@@ -203,9 +203,9 @@ financialRouter.get(
          WHERE wb.tonnage > 0 ORDER BY z.name, cm.name`,
       ),
       pool.query(
-        `SELECT t.ticket_number, t.date, z.name AS zavod_name, cm.name AS mark, t.packaging, t.remaining_tonnage AS tonnage,
+        `SELECT t.ticket_number, t.date, COALESCE(f.name, z.name) AS zavod_name, cm.name AS mark, t.packaging, t.remaining_tonnage AS tonnage,
                 t.price_per_ton, t.remaining_sum AS value
-         FROM tickets t JOIN zavody z ON z.id = t.zavod_id JOIN cement_marks cm ON cm.id = t.cement_mark_id
+         FROM tickets t JOIN zavody z ON z.id = t.zavod_id JOIN cement_marks cm ON cm.id = t.cement_mark_id LEFT JOIN factories f ON f.id = t.factory_id
          WHERE t.status = 'active' AND t.remaining_tonnage > 0 ORDER BY z.name, cm.name, t.date`,
       ),
     ]);

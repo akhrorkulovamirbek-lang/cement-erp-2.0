@@ -510,12 +510,12 @@ export function Sales() {
                       name="ticket_id"
                       options={(tickets.data ?? []).map((t) => ({
                         value: String(t.id),
-                        label: `${t.ticket_number} · ${t.zavod_name} · ${t.cement_mark_name} · ${PACKAGING_LABELS[t.packaging]} · остаток ${formatNumber(t.remaining_tonnage, 3)} т · цена покупки ${formatMoney(t.price_per_ton)}/т`,
+                        label: `${t.ticket_number} · ${t.factory_name ?? t.zavod_name} · ${t.cement_mark_name} · ${PACKAGING_LABELS[t.packaging]} · остаток ${formatNumber(t.remaining_tonnage, 3)} т · цена покупки ${formatMoney(t.price_per_ton)}/т`,
                       }))}
                     />
                     {selectedTicket && (
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Завод/марка/упаковка зафиксированы тикетом: {selectedTicket.zavod_name}, {selectedTicket.cement_mark_name}, {PACKAGING_LABELS[selectedTicket.packaging]}. Цена покупки: {formatMoney(selectedTicket.price_per_ton)} за тонну
+                        Завод/марка/упаковка зафиксированы тикетом: {selectedTicket.factory_name ?? selectedTicket.zavod_name}, {selectedTicket.cement_mark_name}, {PACKAGING_LABELS[selectedTicket.packaging]}. Цена покупки: {formatMoney(selectedTicket.price_per_ton)} за тонну
                       </p>
                     )}
                   </FormRow>
