@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../../db/pool.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { nameKey } from '../../lib/nameKey.js';
 import { UZS_EXPENSE } from './routes.js';
 
 /** «Контроль данных»: ищет в базе то, что молча искажает отчёты — операции, не попавшие в карточку нужного
@@ -39,15 +40,6 @@ const plateKey = (s: string) =>
     .split('')
     .map((ch) => LOOKALIKE[ch] ?? ch)
     .join('');
-const nameKey = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-    .split(/\s+/)
-    .filter(Boolean)
-    .sort()
-    .join(' ');
-
 function median(values: number[]): number {
   const v = [...values].sort((a, b) => a - b);
   const m = Math.floor(v.length / 2);
