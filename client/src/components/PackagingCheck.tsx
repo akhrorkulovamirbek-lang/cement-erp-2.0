@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { usePackagingCheck } from '@/api/modules';
+import { usePackagingCheck, type PackagingMismatch } from '@/api/modules';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PACKAGING_LABELS } from '@/lib/constants';
-import { formatDate, formatNumber } from '@/lib/format';
+import { formatDate, formatMoney, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
-const SRC: Record<string, string> = { incoming: 'Приход', sales: 'Продажа', tickets: 'Тикет' };
 const label = (p: 'MESHOK' | 'NAVAL' | null) => (p ? PACKAGING_LABELS[p] : 'не указана');
 
 /** Сверка упаковки: сравнивает слово «мешок»/«навал» в названии марки с полем «Упаковка» в записях. Только чтение —
@@ -52,6 +52,9 @@ export function PackagingCheck() {
             </div>
           )}
 
+          {d.mismatches.length > 0 && <MismatchList items={d.mismatches} />}
+
+          <div className="text-sm font-medium">По маркам</div>
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">
               <thead>
@@ -83,39 +86,6 @@ export function PackagingCheck() {
             </table>
           </div>
 
-          {d.mismatches.length > 0 && (
-            <div>
-              <div className="mb-2 text-sm font-medium">Записи с расхождением{d.mismatchTotal > d.mismatches.length ? ` (показаны первые ${d.mismatches.length} из ${d.mismatchTotal})` : ''}</div>
-              <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/50 text-muted-foreground">
-                      <th className="px-3 py-2 text-left font-medium">Что</th>
-                      <th className="px-3 py-2 text-left font-medium">Дата</th>
-                      <th className="px-3 py-2 text-left font-medium">Кто</th>
-                      <th className="px-3 py-2 text-left font-medium">Марка</th>
-                      <th className="px-3 py-2 text-right font-medium">Тонн</th>
-                      <th className="px-3 py-2 text-left font-medium">В записи</th>
-                      <th className="px-3 py-2 text-left font-medium">По названию</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {d.mismatches.map((r) => (
-                      <tr key={`${r.src}-${r.id}`} className="border-b last:border-0">
-                        <td className="px-3 py-1.5">{SRC[r.src]} №{r.id}</td>
-                        <td className="px-3 py-1.5 whitespace-nowrap">{formatDate(r.date)}</td>
-                        <td className="px-3 py-1.5">{r.who ?? '—'}</td>
-                        <td className="px-3 py-1.5">{r.mark}</td>
-                        <td className="px-3 py-1.5 text-right tabular-nums">{formatNumber(r.tonnage, 3)}</td>
-                        <td className="px-3 py-1.5 text-destructive">{label(r.packaging)}</td>
-                        <td className="px-3 py-1.5">{label(r.expected)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -123,3 +93,76 @@ export function PackagingCheck() {
 }
 
 type PackagingCheckCell = { incoming: number; sales: number; tickets: number; stockTon: number };
+
+const WHO_LABEL: Record<string, string> = { sales: 'Клиент', incoming: 'Поставщик', tickets: 'Тикет' };
+
+/** Записи, где марка и упаковка не совпадают, — по вкладкам: продажи, приходы, тикеты. */
+function MismatchList({ items }: { items: PackagingMismatch[] }) {
+  const by = (src: string) => items.filter((i) => i.src === src);
+  const tabs = [
+    { key: 'sales', title: 'Продажи' },
+    { key: 'incoming', title: 'Приходы' },
+    { key: 'tickets', title: 'Тикеты' },
+  ];
+  const first = tabs.find((t) => by(t.key).length > 0)?.key ?? 'sales';
+  return (
+    <div>
+      <div className="mb-1 text-sm font-medium">Записи, где марка и упаковка не совпадают</div>
+      <p className="mb-2 text-xs text-muted-foreground">
+        В названии марки одна упаковка, а в самой записи другая. Найдите запись в «Продажах» или «Приходе» (по дате, клиенту или номеру машины), откройте «Изменить» и поправьте марку или упаковку.
+      </p>
+      <Tabs defaultValue={first}>
+        <TabsList>
+          {tabs.map((t) => (
+            <TabsTrigger key={t.key} value={t.key}>
+              {t.title} ({by(t.key).length})
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {tabs.map((t) => (
+          <TabsContent key={t.key} value={t.key} className="mt-3">
+            {by(t.key).length === 0 ? (
+              <p className="text-sm text-muted-foreground">Расхождений нет.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50 text-muted-foreground">
+                      <th className="px-3 py-2 text-left font-medium">№</th>
+                      <th className="px-3 py-2 text-left font-medium">Дата</th>
+                      <th className="px-3 py-2 text-left font-medium">{WHO_LABEL[t.key]}</th>
+                      <th className="px-3 py-2 text-left font-medium">Марка в записи</th>
+                      <th className="px-3 py-2 text-left font-medium">Упаковка в записи</th>
+                      <th className="px-3 py-2 text-right font-medium">Тонн</th>
+                      <th className="px-3 py-2 text-right font-medium">Цена/т</th>
+                      <th className="px-3 py-2 text-right font-medium">Сумма</th>
+                      <th className="px-3 py-2 text-left font-medium">Машина</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {by(t.key).map((r) => (
+                      <tr key={`${r.src}-${r.id}`} className="border-b last:border-0">
+                        <td className="px-3 py-1.5">{r.id}</td>
+                        <td className="px-3 py-1.5 whitespace-nowrap">{formatDate(r.date)}</td>
+                        <td className="px-3 py-1.5">{r.who ?? '—'}</td>
+                        <td className="px-3 py-1.5">{r.mark}</td>
+                        <td className="px-3 py-1.5">
+                          <span className="text-destructive">{label(r.packaging)}</span>
+                          <span className="text-muted-foreground"> (по названию — {label(r.expected)})</span>
+                        </td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">{formatNumber(r.tonnage, 3)}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">{r.price != null ? formatMoney(r.price) : '—'}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">{r.sum != null ? formatMoney(r.sum) : '—'}</td>
+                        <td className="px-3 py-1.5">{r.machine ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </TabsContent>
+        ))}
+      </Tabs>
+    </div>
+  );
+}

@@ -709,6 +709,9 @@ export interface PackagingMismatch {
   expected: 'MESHOK' | 'NAVAL';
   tonnage: number;
   who: string | null;
+  price: number | null;
+  sum: number | null;
+  machine: string | null;
 }
 export function usePackagingCheck(enabled: boolean) {
   return useQuery({
