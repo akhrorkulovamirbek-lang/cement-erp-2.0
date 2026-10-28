@@ -172,21 +172,23 @@ export function IncomingPage() {
       zavod_id: String(row.zavod_id),
       factory_id: row.factory_id ? String(row.factory_id) : '',
       direct_sale: row.warehouse === 'CLIENT_GOODS' && row.linked_sale_id != null,
-      buyer_client_id: '',
+      buyer_client_id: row.warehouse === 'CLIENT_GOODS' && row.sale_client_id ? String(row.sale_client_id) : '',
       cement_mark_id: String(row.cement_mark_id),
       packaging: row.packaging,
       tonnage: row.tonnage,
       price_per_ton: row.price_per_ton,
       machine_number: row.machine_number ?? '',
       comment: row.comment ?? '',
-      client_id: row.warehouse === 'CLIENT_GOODS' && row.client_id ? String(row.client_id) : '',
-      sale_price_per_ton: '',
-      vehicle_type: '',
-      own_vehicle_id: '',
-      sale_machine_number: '',
-      carrier_name: '',
-      freight_price_per_ton: '',
-      hire_price_per_ton: '',
+      // «Напрямую»: клиент — это покупатель из связанной продажи; «Оплата цементом» — клиент, отдавший цемент.
+      client_id:
+        row.warehouse === 'CLIENT_GOODS' && row.client_id ? String(row.client_id) : row.warehouse === 'DIRECT' && row.sale_client_id ? String(row.sale_client_id) : '',
+      sale_price_per_ton: row.sale_price_per_ton ?? '',
+      vehicle_type: row.sale_vehicle_type ?? '',
+      own_vehicle_id: row.sale_own_vehicle_id ? String(row.sale_own_vehicle_id) : '',
+      sale_machine_number: row.sale_machine_number ?? '',
+      carrier_name: row.sale_carrier_name ?? '',
+      freight_price_per_ton: row.sale_freight_price_per_ton ?? '',
+      hire_price_per_ton: row.sale_hire_price_per_ton ?? '',
     });
     setWarehouse(row.warehouse);
     setEditing(row);
@@ -672,9 +674,12 @@ export function IncomingPage() {
                   <Input type="number" step="0.01" {...register('price_per_ton', { required: 'Укажите цену' })} />
                 </FormRow>
               </div>
-              <FormRow label="Номер машины (необязательно)">
-                <SuggestInput {...register('machine_number')} options={suggestions.data?.plates ?? []} />
-              </FormRow>
+              {/* При продаже «Напрямую» номер машины вводится ниже, в блоке «Тип машины», — здесь второй не нужен. */}
+              {!sellDirect && (
+                <FormRow label="Номер машины (необязательно)">
+                  <SuggestInput {...register('machine_number')} options={suggestions.data?.plates ?? []} />
+                </FormRow>
+              )}
 
               {warehouse === 'CLIENT_GOODS' && (
                 <div className="space-y-2 rounded-md bg-muted p-3">

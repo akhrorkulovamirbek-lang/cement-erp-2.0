@@ -39,7 +39,11 @@ incomingRouter.get(
               -- Машина: номер из самого прихода, а у прямой продажи — машина, на которой цемент поехал клиенту.
               COALESCE(NULLIF(i.machine_number, ''), COALESCE(ov.number, ls.machine_number)) AS machine_display,
               -- Покупатель при прямой продаже: хранится в связанной продаже, а не в самом приходе.
-              bc.name AS buyer_name
+              bc.name AS buyer_name,
+              -- Поля связанной продажи — чтобы при «Изменить» форма прямой продажи открывалась заполненной.
+              ls.client_id AS sale_client_id, ls.price_per_ton AS sale_price_per_ton, ls.vehicle_type AS sale_vehicle_type,
+              ls.own_vehicle_id AS sale_own_vehicle_id, ls.machine_number AS sale_machine_number, ls.carrier_name AS sale_carrier_name,
+              ls.freight_price_per_ton AS sale_freight_price_per_ton, ls.hire_price_per_ton AS sale_hire_price_per_ton
        FROM incoming i
        LEFT JOIN sales ls ON ls.id = i.linked_sale_id
        LEFT JOIN machines ov ON ov.id = ls.own_vehicle_id

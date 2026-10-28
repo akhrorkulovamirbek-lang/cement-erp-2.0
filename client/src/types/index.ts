@@ -210,6 +210,14 @@ export interface Incoming {
   machine_number: string | null;
   machine_display: string | null;
   buyer_name: string | null;
+  sale_client_id: number | null;
+  sale_price_per_ton: string | null;
+  sale_vehicle_type: 'CLIENT' | 'OWN' | 'HIRED' | null;
+  sale_own_vehicle_id: number | null;
+  sale_machine_number: string | null;
+  sale_carrier_name: string | null;
+  sale_freight_price_per_ton: string | null;
+  sale_hire_price_per_ton: string | null;
   factory_id: number | null;
   factory_name: string | null;
   client_id: number | null;
