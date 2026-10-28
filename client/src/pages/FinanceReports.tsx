@@ -22,7 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PACKAGING_LABELS } from '@/lib/constants';
 import { formatDate, formatMoney, formatNumber } from '@/lib/format';
-import { downloadStyledTable } from '@/lib/styledExcel';
+import { downloadStyledTable, excelError } from '@/lib/styledExcel';
 import { useToast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
@@ -213,7 +213,7 @@ function PnlSection({ period }: { period: PeriodState }) {
       ],
       rows,
       rowFills: fills,
-    }).catch(() => notify('Не удалось сформировать файл', 'error'));
+    }).catch((e) => notify(excelError(e), 'error'));
   }
 
   if (!m || !d) return <Empty loading={pnl.isLoading} />;
@@ -432,7 +432,7 @@ function MarginsSection({ period }: { period: PeriodState }) {
         Number(r.revenue) ? Number(r.margin) / Number(r.revenue) : 0,
       ]),
       totals: ['ИТОГО', '', '', '', total.t, null, null, total.rev, total.cost, total.m, total.rev ? total.m / total.rev : 0],
-    }).catch(() => notify('Не удалось сформировать файл', 'error'));
+    }).catch((e) => notify(excelError(e), 'error'));
   }
 
   if (rows.length === 0) return <Empty loading={report.isLoading} />;
@@ -566,7 +566,7 @@ function CashFlowSection({ period }: { period: PeriodState }) {
       ],
       rows: lines.map((l) => [l.label, l.UZS, l.USD]),
       rowFills: lines.map((l) => l.fill),
-    }).catch(() => notify('Не удалось сформировать файл', 'error'));
+    }).catch((e) => notify(excelError(e), 'error'));
   }
 
   if (!d || !calc) return <Empty loading={flow.isLoading} />;
@@ -705,7 +705,7 @@ function BrokerSection({ period }: { period: PeriodState }) {
       ],
       rows: d.rows.map((r) => [formatDate(r.date), BROKER_LABELS[r.type], r.ticket_number ?? '', r.description ?? '', r.type === 'ticket_purchase' ? -r.amount : r.amount, r.balance]),
       rowFills: d.rows.map((r) => (r.type === 'ticket_purchase' ? 'FFFDECEA' : 'FFE6F4EA')),
-    }).catch(() => notify('Не удалось сформировать файл', 'error'));
+    }).catch((e) => notify(excelError(e), 'error'));
   }
 
   if (!d) return <Empty loading={report.isLoading} />;
@@ -810,7 +810,7 @@ function StockSection() {
       rows,
       rowFills: rows.map((r) => (r[0] === 'Склад' ? 'FFFFF4E0' : 'FFE3F0FB')),
       totals: ['ИТОГО', '', '', '', '', whTon + tkTon, null, whValue + tkValue],
-    }).catch(() => notify('Не удалось сформировать файл', 'error'));
+    }).catch((e) => notify(excelError(e), 'error'));
   }
 
   if (!d) return <Empty loading={stock.isLoading} />;
@@ -960,7 +960,7 @@ function MachinesSection({ period }: { period: PeriodState }) {
       rows: rows.map((r) => [r.label, r.type === 'own' ? 'Своя' : 'Наёмная', r.trips, r.tonnage, r.revenue, r.cost, costText(r), r.profit, r.tonnage ? r.profit / r.tonnage : 0]),
       rowFills: rows.map((r) => (r.type === 'own' ? 'FFE3F0FB' : undefined)),
       totals: ['ИТОГО', '', own.trips + hired.trips, own.ton + hired.ton, own.rev + hired.rev, own.cost + hired.cost, '', own.profit + hired.profit, null],
-    }).catch(() => notify('Не удалось сформировать файл', 'error'));
+    }).catch((e) => notify(excelError(e), 'error'));
   }
 
   if (rows.length === 0) return <Empty loading={report.isLoading} />;

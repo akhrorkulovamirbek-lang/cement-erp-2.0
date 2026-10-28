@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button';
 import { PACKAGING_LABELS, PACKAGING_OPTIONS } from '@/lib/constants';
 import { downloadClientReport, type ReportRow } from '@/lib/clientReportExcel';
 import { formatDate, formatMoney, formatNumber, todayISO } from '@/lib/format';
+import { excelError } from '@/lib/styledExcel';
 import { useToast } from '@/lib/toast';
 import type { CashExpense, CashIncome, ClientDebtAdjustment, Incoming, Sale } from '@/types';
 
@@ -361,8 +362,8 @@ export function ClientDetail() {
         balance: Number(balance?.balance ?? 0),
         rows,
       });
-    } catch {
-      notify('Не удалось сформировать файл', 'error');
+    } catch (e) {
+      notify(excelError(e), 'error');
     }
   }
 

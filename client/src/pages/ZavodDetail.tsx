@@ -9,7 +9,7 @@ import { StatCard } from '@/components/StatCard';
 import { Button } from '@/components/ui/button';
 import { PACKAGING_LABELS } from '@/lib/constants';
 import { formatDate, formatMoney, formatNumber } from '@/lib/format';
-import { downloadStyledTable } from '@/lib/styledExcel';
+import { downloadStyledTable, excelError } from '@/lib/styledExcel';
 import { useToast } from '@/lib/toast';
 import type { CashExpense } from '@/types';
 
@@ -252,8 +252,8 @@ export function ZavodDetail() {
         rowFills: fills,
         totals: ['ИТОГО', '', '', '', '', '', null, null, Number(balance?.purchased ?? 0), Number(balance?.paid ?? 0), '', '', Number(balance?.balance ?? 0)],
       });
-    } catch {
-      notify('Не удалось сформировать файл', 'error');
+    } catch (e) {
+      notify(excelError(e), 'error');
     }
   }
 

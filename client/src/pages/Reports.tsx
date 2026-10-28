@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PACKAGING_LABELS } from '@/lib/constants';
 import { formatMoney, formatNumber } from '@/lib/format';
-import { downloadStyledTable } from '@/lib/styledExcel';
+import { downloadStyledTable, excelError } from '@/lib/styledExcel';
 import { useToast } from '@/lib/toast';
 import type { CarrierBalance, CementReportRow, ClientBalance, SupplierReportRow, VehicleReportRow } from '@/types';
 
@@ -409,8 +409,8 @@ function SuppliersTab() {
         rowFills: rows.map((r) => (r.type === 'zavod' ? 'FFFFF4E0' : 'FFE3F0FB')),
         totals: ['ИТОГО', '', totals.tonnage, totals.received, totals.sold, totals.paidUs, totals.paidHim, totals.owe],
       });
-    } catch {
-      notify('Не удалось сформировать файл', 'error');
+    } catch (e) {
+      notify(excelError(e), 'error');
     }
   }
 

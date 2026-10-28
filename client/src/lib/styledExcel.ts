@@ -111,3 +111,14 @@ export async function downloadStyledTable(params: {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+/** Понятное сообщение, если не получилось сформировать Excel. Чаще всего причина — страница открыта со времён
+ * прошлой версии сайта и не может подгрузить нужный кусок кода: помогает обновление страницы. */
+export function excelError(err: unknown): string {
+  console.error('Excel export failed:', err);
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/dynamically imported|Failed to fetch|Importing a module script|ChunkLoadError|Loading chunk/i.test(msg)) {
+    return 'Страница устарела после обновления сайта. Обновите её (Ctrl+R) и скачайте заново.';
+  }
+  return `Не удалось сформировать файл: ${msg.slice(0, 120)}`;
+}
