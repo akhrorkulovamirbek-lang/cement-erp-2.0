@@ -689,3 +689,31 @@ export const useCashFlow = (p: Period) => useQuery({ queryKey: ['fin-cashflow', 
 export const useBrokerReport = (p: Period) => useQuery({ queryKey: ['fin-broker', p], queryFn: () => api.get<BrokerReportData>(`/report/broker${buildQuery(p)}`) });
 export const useStockReport = () => useQuery({ queryKey: ['fin-stock'], queryFn: () => api.get<StockReportData>('/report/stock') });
 export const useMachinesReport = (p: Period) => useQuery({ queryKey: ['fin-machines', p], queryFn: () => api.get<MachineRow[]>(`/report/machines${buildQuery(p)}`) });
+
+// ---- Сверка упаковки марок ----
+export interface PackagingCheckMark {
+  id: number;
+  name: string;
+  active: boolean;
+  hint: 'MESHOK' | 'NAVAL' | null;
+  by: Record<'MESHOK' | 'NAVAL', { incoming: number; sales: number; tickets: number; stockTon: number }>;
+  wrong: number;
+  stockWrong: number;
+}
+export interface PackagingMismatch {
+  src: 'incoming' | 'sales' | 'tickets';
+  id: number;
+  date: string;
+  mark: string;
+  packaging: 'MESHOK' | 'NAVAL' | null;
+  expected: 'MESHOK' | 'NAVAL';
+  tonnage: number;
+  who: string | null;
+}
+export function usePackagingCheck(enabled: boolean) {
+  return useQuery({
+    queryKey: ['packaging-check'],
+    queryFn: () => api.get<{ marks: PackagingCheckMark[]; mismatches: PackagingMismatch[]; mismatchTotal: number }>('/cement-marks/packaging-check'),
+    enabled,
+  });
+}

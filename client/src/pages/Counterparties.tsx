@@ -2,6 +2,7 @@ import { LogistsTab } from './Logists';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { ApiError } from '@/api/client';
+import { PackagingCheck } from '@/components/PackagingCheck';
 import { bankAccountsHooks, cementMarksHooks, factoriesHooks, logisticsExpenseCategoriesHooks, machinesHooks } from '@/api/modules';
 import { Badge } from '@/components/Badge';
 import { RHFButtonGroup } from '@/components/ButtonGroup';
@@ -71,6 +72,7 @@ export function Counterparties() {
         </TabsContent>
 
         <TabsContent value="marks" className="mt-4">
+          <PackagingCheck />
           <SimpleRefTable
             title="Марки цемента"
             addLabel="Добавить марку"
