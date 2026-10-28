@@ -37,10 +37,13 @@ incomingRouter.get(
     const { rows } = await pool.query(
       `SELECT i.*, z.name AS zavod_name, cm.name AS cement_mark_name, c.name AS client_name, f.name AS factory_name,
               -- Машина: номер из самого прихода, а у прямой продажи — машина, на которой цемент поехал клиенту.
-              COALESCE(NULLIF(i.machine_number, ''), COALESCE(ov.number, ls.machine_number)) AS machine_display
+              COALESCE(NULLIF(i.machine_number, ''), COALESCE(ov.number, ls.machine_number)) AS machine_display,
+              -- Покупатель при прямой продаже: хранится в связанной продаже, а не в самом приходе.
+              bc.name AS buyer_name
        FROM incoming i
        LEFT JOIN sales ls ON ls.id = i.linked_sale_id
        LEFT JOIN machines ov ON ov.id = ls.own_vehicle_id
+       LEFT JOIN clients bc ON bc.id = ls.client_id
        LEFT JOIN factories f ON f.id = i.factory_id
        JOIN zavody z ON z.id = i.zavod_id
        JOIN cement_marks cm ON cm.id = i.cement_mark_id

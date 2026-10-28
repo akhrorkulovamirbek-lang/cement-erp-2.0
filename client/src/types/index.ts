@@ -209,6 +209,7 @@ export interface Incoming {
   total_sum: string;
   machine_number: string | null;
   machine_display: string | null;
+  buyer_name: string | null;
   factory_id: number | null;
   factory_name: string | null;
   client_id: number | null;

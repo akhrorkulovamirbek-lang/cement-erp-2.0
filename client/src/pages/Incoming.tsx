@@ -270,7 +270,18 @@ export function IncomingPage() {
     {
       key: 'client_name',
       header: 'Контрагент',
-      render: (r) => r.client_name || '—',
+      sortValue: (r) => r.client_name || r.buyer_name || '',
+      // «Оплата цементом» — клиент, отдавший цемент; «Напрямую» — клиент, которому цемент продан.
+      render: (r) =>
+        r.client_name ? (
+          r.client_name
+        ) : r.buyer_name ? (
+          <span>
+            {r.buyer_name} <span className="text-xs text-muted-foreground">(покупатель)</span>
+          </span>
+        ) : (
+          '—'
+        ),
     },
     { key: 'packaging', header: 'Упаковка', render: (r) => PACKAGING_LABELS[r.packaging] },
     { key: 'machine_display', header: 'Машина', sortValue: (r) => r.machine_display ?? '', render: (r) => r.machine_display || '—' },
