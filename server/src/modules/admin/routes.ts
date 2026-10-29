@@ -12,6 +12,7 @@ export const adminRouter = Router();
 const DATA_TABLES = [
   'sale_requests',
   'client_debt_adjustments',
+  'zavod_debt_adjustments',
   'cash_service_operations',
   'cash_income',
   'cash_expense',

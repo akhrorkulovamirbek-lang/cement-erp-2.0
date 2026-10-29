@@ -31,6 +31,9 @@ export const CLIENT_PAID_SUBQUERY = `
 `;
 // Корректировка долга клиента: положительная увеличивает «куплено», отрицательная уходит в «оплачено».
 export const CLIENT_ADJ_PLUS_SUBQUERY = `SELECT client_id, SUM(amount) AS total FROM client_debt_adjustments WHERE amount > 0 GROUP BY client_id`;
+// Корректировка долга поставщика: плюс — к «куплено», минус — в «оплачено».
+export const ZAVOD_ADJ_PLUS_SUBQUERY = `SELECT zavod_id, SUM(amount) AS total FROM zavod_debt_adjustments WHERE amount > 0 GROUP BY zavod_id`;
+export const ZAVOD_ADJ_MINUS_SUBQUERY = `SELECT zavod_id, -SUM(amount) AS total FROM zavod_debt_adjustments WHERE amount < 0 GROUP BY zavod_id`;
 const ZAVOD_PURCHASED_EXCLUDE_CLIENT_GOODS = `warehouse <> 'CLIENT_GOODS'`;
 
 reportsRouter.get(
@@ -134,10 +137,12 @@ reportsRouter.get(
   asyncHandler(async (_req, res) => {
     const { rows } = await pool.query(
       `SELECT z.id, z.name,
-              z.initial_debt + COALESCE(incoming_total.total, 0) AS purchased,
-              COALESCE(paid_total.total, 0) AS paid,
-              z.initial_debt + COALESCE(incoming_total.total, 0) - COALESCE(paid_total.total, 0) AS balance
+              z.initial_debt + COALESCE(incoming_total.total, 0) + COALESCE(adj_plus.total, 0) AS purchased,
+              COALESCE(paid_total.total, 0) + COALESCE(adj_minus.total, 0) AS paid,
+              z.initial_debt + COALESCE(incoming_total.total, 0) + COALESCE(adj_plus.total, 0) - COALESCE(paid_total.total, 0) - COALESCE(adj_minus.total, 0) AS balance
        FROM zavody z
+       LEFT JOIN (${ZAVOD_ADJ_PLUS_SUBQUERY}) adj_plus ON adj_plus.zavod_id = z.id
+       LEFT JOIN (${ZAVOD_ADJ_MINUS_SUBQUERY}) adj_minus ON adj_minus.zavod_id = z.id
        LEFT JOIN (
          SELECT zavod_id, SUM(total_sum) AS total FROM incoming WHERE ${ZAVOD_PURCHASED_EXCLUDE_CLIENT_GOODS} GROUP BY zavod_id
        ) incoming_total ON incoming_total.zavod_id = z.id
@@ -166,11 +171,13 @@ reportsRouter.get(
          ORDER BY balance DESC`,
       ),
       pool.query(
-        `SELECT z.id, z.name, z.initial_debt + COALESCE(i.total, 0) - COALESCE(p.total, 0) AS balance
+        `SELECT z.id, z.name, z.initial_debt + COALESCE(i.total, 0) + COALESCE(ap.total, 0) - COALESCE(p.total, 0) - COALESCE(am.total, 0) AS balance
          FROM zavody z
+         LEFT JOIN (${ZAVOD_ADJ_PLUS_SUBQUERY}) ap ON ap.zavod_id = z.id
+         LEFT JOIN (${ZAVOD_ADJ_MINUS_SUBQUERY}) am ON am.zavod_id = z.id
          LEFT JOIN (SELECT zavod_id, SUM(total_sum) AS total FROM incoming WHERE ${ZAVOD_PURCHASED_EXCLUDE_CLIENT_GOODS} GROUP BY zavod_id) i ON i.zavod_id = z.id
          LEFT JOIN (SELECT zavod_id, SUM(${UZS_EXPENSE}) AS total FROM cash_expense WHERE zavod_id IS NOT NULL AND category = 'цемент' GROUP BY zavod_id) p ON p.zavod_id = z.id
-         WHERE z.initial_debt + COALESCE(i.total, 0) - COALESCE(p.total, 0) <> 0
+         WHERE z.initial_debt + COALESCE(i.total, 0) + COALESCE(ap.total, 0) - COALESCE(p.total, 0) - COALESCE(am.total, 0) <> 0
          ORDER BY balance DESC`,
       ),
       pool.query(`SELECT name, logist_id, balance FROM (${CARRIER_BALANCES_SQL}) c WHERE balance <> 0 ORDER BY balance DESC`),
@@ -314,12 +321,14 @@ reportsRouter.get(
     const { rows } = await pool.query(
       `SELECT 'zavod' AS type, z.id, z.name,
               COALESCE(inc.tonnage, 0) AS received_tonnage,
-              z.initial_debt + COALESCE(inc.total, 0) AS received_sum,
+              z.initial_debt + COALESCE(inc.total, 0) + COALESCE(ap.total, 0) AS received_sum,
               0 AS sold_sum,
-              COALESCE(pay.total, 0) AS paid_by_us,
+              COALESCE(pay.total, 0) + COALESCE(am.total, 0) AS paid_by_us,
               0 AS paid_by_him,
-              z.initial_debt + COALESCE(inc.total, 0) - COALESCE(pay.total, 0) AS we_owe
+              z.initial_debt + COALESCE(inc.total, 0) + COALESCE(ap.total, 0) - COALESCE(pay.total, 0) - COALESCE(am.total, 0) AS we_owe
        FROM zavody z
+       LEFT JOIN (${ZAVOD_ADJ_PLUS_SUBQUERY}) ap ON ap.zavod_id = z.id
+       LEFT JOIN (${ZAVOD_ADJ_MINUS_SUBQUERY}) am ON am.zavod_id = z.id
        LEFT JOIN (
          SELECT zavod_id, SUM(tonnage) AS tonnage, SUM(total_sum) AS total
          FROM incoming WHERE ${ZAVOD_PURCHASED_EXCLUDE_CLIENT_GOODS} GROUP BY zavod_id

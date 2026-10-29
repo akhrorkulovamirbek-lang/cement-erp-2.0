@@ -389,6 +389,15 @@ export interface ClientDebtAdjustment {
   created_at: string;
 }
 
+export interface ZavodDebtAdjustment {
+  id: number;
+  zavod_id: number;
+  date: string;
+  amount: string;
+  comment: string;
+  created_at: string;
+}
+
 export interface TicketReturnInfo {
   id: number;
   date: string;

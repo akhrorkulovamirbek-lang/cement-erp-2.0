@@ -542,3 +542,14 @@ CREATE TABLE IF NOT EXISTS bot_settings (
 ALTER TABLE sale_requests ADD COLUMN IF NOT EXISTS form JSONB;
 ALTER TABLE sale_requests ADD COLUMN IF NOT EXISTS problems TEXT;
 ALTER TABLE sale_requests ALTER COLUMN payload DROP NOT NULL;
+
+-- Корректировка долга поставщика: amount > 0 — мы должны ему больше, amount < 0 — меньше. Причина обязательна.
+CREATE TABLE IF NOT EXISTS zavod_debt_adjustments (
+  id SERIAL PRIMARY KEY,
+  zavod_id INTEGER NOT NULL REFERENCES zavody(id),
+  date DATE NOT NULL,
+  amount NUMERIC(16,2) NOT NULL CHECK (amount <> 0),
+  comment TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_zavod_debt_adjustments_zavod ON zavod_debt_adjustments(zavod_id);

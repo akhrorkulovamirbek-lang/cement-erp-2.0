@@ -13,6 +13,7 @@ import { brokerRouter } from './modules/broker/routes.js';
 import { cashExpenseRouter, cashIncomeRouter } from './modules/cash/routes.js';
 import { cashServiceRouter } from './modules/cashService/routes.js';
 import { clientAdjustmentsRouter } from './modules/clientAdjustments/routes.js';
+import { zavodAdjustmentsRouter } from './modules/zavodAdjustments/routes.js';
 import { cementMarksRouter } from './modules/cementMarks/routes.js';
 import { clientsRouter } from './modules/clients/routes.js';
 import { logisticsExpenseCategoriesRouter } from './modules/expenseCategories/routes.js';
@@ -113,6 +114,12 @@ export function createApp() {
     requireAnyPermission('cash', 'sales'),
     auditResource('client_adjustment', { table: 'client_debt_adjustments', label: 'Корректировка долга клиента' }),
     clientAdjustmentsRouter,
+  );
+  app.use(
+    '/api/zavod-adjustments',
+    requireAnyPermission('cash', 'incoming'),
+    auditResource('zavod_adjustment', { table: 'zavod_debt_adjustments', label: 'Корректировка долга поставщика' }),
+    zavodAdjustmentsRouter,
   );
   app.use('/api/bot', requireAnyPermission('sales', 'settings'), botRouter);
   app.use('/api/vehicles', requireAnyPermission('sales', 'reports', 'references'), vehiclesRouter);

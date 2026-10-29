@@ -16,6 +16,7 @@ import type {
   CashServiceOperation,
   CashServiceSummary,
   ClientDebtAdjustment,
+  ZavodDebtAdjustment,
   Suggestions,
   TicketReturnInfo,
   CementMark,
@@ -212,6 +213,12 @@ export function useTicketReturns(params: { from?: string; to?: string } = {}) {
 export const clientAdjustmentsHooks = createCrudHooks<ClientDebtAdjustment, Record<string, unknown>>(
   'client-adjustments',
   '/client-adjustments',
+  REPORT_KEYS,
+);
+
+export const zavodAdjustmentsHooks = createCrudHooks<ZavodDebtAdjustment, Record<string, unknown>>(
+  'zavod-adjustments',
+  '/zavod-adjustments',
   REPORT_KEYS,
 );
 

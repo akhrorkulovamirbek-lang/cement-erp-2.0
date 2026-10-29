@@ -36,6 +36,7 @@ const TENANT_TABLES = [
   'cash_expense',
   'cash_service_operations',
   'client_debt_adjustments',
+  'zavod_debt_adjustments',
 ];
 
 export async function initDb() {
