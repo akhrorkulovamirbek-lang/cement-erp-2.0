@@ -242,7 +242,7 @@ export function DataTable<T>({
                 </span>
               </TableHead>
             ))}
-            {hasActions && <TableHead className="w-[1%]" />}
+            {hasActions && <TableHead className="sticky right-0 w-[1%] bg-background" />}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -277,7 +277,7 @@ export function DataTable<T>({
                   </TableCell>
                 ))}
                 {hasActions && (
-                  <TableCell className="whitespace-nowrap text-right">
+                  <TableCell className="sticky right-0 whitespace-nowrap bg-background text-right">
                     <div className="flex justify-end gap-1">
                       {extraRowAction?.(row)}
                       {onEdit && (
